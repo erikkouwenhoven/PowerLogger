@@ -23,7 +23,7 @@ class Processor:
         self.scheduler = self.init_scheduler()
 
     def init_scheduler(self):
-        scheduler = BackgroundScheduler()
+        scheduler = BackgroundScheduler(timezone="Europe/Berlin")
         scheduler.add_job(self.do_persist, 'interval', minutes=Settings().persist_interval_minutes(),
                           start_date=datetime.now() + timedelta(minutes=Settings().persist_delay_minutes()), id=self.c_PERSIST_JOB_ID)
         scheduler.start()
@@ -41,12 +41,28 @@ class Processor:
         logging.debug(f"do_persist")
         job = self.scheduler.get_job(job_id=self.c_PERSIST_JOB_ID)
         interval = job.trigger.interval
-        logging.debug(f"do_persist, interval = {interval}")
+        logging.debug(f"do_persist, interval = {interval}, type interval = {type(interval)}")
         # Get the start time of the averaging interval
-#                start_time = self.data_holder.get_most_recent_persistent_time()
-        #   data = self.data_holder.get_average dit is een P1Sample
-        #   data.filter
-        #   self.db_interface.append(data)
+        logging.debug(f"get_persistent_timerange: {self.data_holder.get_persistent_timerange()}")
+
+        if (persistent_timerange := self.data_holder.get_persistent_timerange()) is None:
+            start_timestamp = datetime.timestamp(datetime.fromtimestamp(persistent_timerange[1]) - interval)
+            end_timestamp = persistent_timerange[1]
+            if start_timestamp < persistent_timerange[0]:
+                start_timestamp = persistent_timerange[0]
+        else:
+            realtime_timerange = self.data_holder.get_realtime_timerange()
+            start_timestamp = datetime.timestamp(datetime.fromtimestamp(realtime_timerange[1]) - interval)
+            end_timestamp = realtime_timerange[1]
+            if start_timestamp < realtime_timerange[0]:
+                start_timestamp = realtime_timerange[0]
+
+        start_time = datetime.fromtimestamp(start_timestamp)
+        end_time = datetime.fromtimestamp(end_timestamp)
+        logging.debug(f"Time range for persistent value calculation: {start_time} > {end_time}")
+        avg = self.data_holder.get_realtime_average(start_time, end_time, Settings().persist_signals())
+        logging.debug(f"Average: {avg}")
+        self.data_holder.persist_realtime_average(avg)
 
     def getStr(self):
         return self.data_holder.real_time_data.str_last()
@@ -57,5 +73,11 @@ class Processor:
     def getRealtimeDatadump(self):
         return self.data_holder.real_time_data.dump()
 
-    def get_data(self):
-        return self.data_holder.real_time_data.serialize()
+    def get_data(self, mode):
+        """Returns serialized data for either realtime or persistent"""
+        if mode == 'mode=realtime':
+            return self.data_holder.real_time_data.serialize()
+        elif mode == 'mode=persistent':
+            return self.data_holder.persistent_data.serialize()  # even voor de test
+        else:
+            raise ValueError(f"get_data either handles mode=realtime or mode=persistent; instead got {mode}")

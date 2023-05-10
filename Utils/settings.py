@@ -43,7 +43,10 @@ class Settings:
         return int(eval(self.config.get('DATARETRIEVAL', 'real_time_buf')))
 
     def persist_signals(self):
-        return [DataType[name] for name in self.config.get('SCHEDULER', 'persist_signals').split()]
+        return [DataType[name] for name in self.config.get('DATARETRIEVAL', 'persist_signals').split()]
+
+    def persist_buf_length(self):
+        return int(eval(self.config.get('DATARETRIEVAL', 'persist_buf')))
 
     def persist_interval_minutes(self):
         return int(self.config.get('SCHEDULER', 'persist_interval_minutes'))

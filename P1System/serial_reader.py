@@ -11,7 +11,9 @@ class SerialReader:
 
     def __init__(self, serial_settings: SerialSettings):
         ports = list(serial.tools.list_ports.comports())
-        logging.info(f"Available ports: {ports}")
+        logging.info("Available ports:")
+        for port in ports:
+            logging.debug(f"  {port.name}")
         self.port = self.initPort(serial_settings)
         self.stop_running = False  # for signalling to stop running
 

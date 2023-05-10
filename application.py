@@ -21,7 +21,7 @@ def initializeLogging(pathToFile):
     logging.getLogger().addHandler(RotatingFileHandler(filepath, maxBytes=100000, backupCount=10))
     logging.getLogger("PyQt6").setLevel(logging.CRITICAL)
     logging.getLogger('matplotlib').setLevel(logging.CRITICAL)
-    logging.getLogger("apscheduler").setLevel(logging.CRITICAL)
+    logging.getLogger("apscheduler").setLevel(logging.DEBUG)
     logging.getLogger("urllib3").setLevel(logging.ERROR)
     logging.info('Start application')
 
