@@ -1,6 +1,7 @@
 import os
 import configparser
-from P1System.data_classes import DataType
+import serial
+from DataHolder.buffer_attrs import Persistency, LifeSpan
 
 
 class Settings:
@@ -25,28 +26,39 @@ class Settings:
         return self.config.get('RS232', 'port')
 
     def rs232Parity(self):
-        return self.config.get('RS232', 'parity')
+        return eval(self.config.get('RS232', 'parity'))
 
     def rs232Baud(self):
         return int(self.config.get('RS232', 'baudrate'))
 
     def rs232Stopbits(self):
-        return self.config.get('RS232', 'stopbits')
+        return eval(self.config.get('RS232', 'stopbits'))
 
     def rs232Bytesize(self):
-        return self.config.get('RS232', 'bytesize')
+        return eval(self.config.get('RS232', 'bytesize'))
 
-    def real_time_signals(self):
-        return [DataType[name] for name in self.config.get('DATARETRIEVAL', 'real_time_signals').split()]
+    def get_data_stores(self) -> list[str]:
+        return self.config.get('DATARETRIEVAL', 'data_stores').split()
 
-    def real_time_buf_length(self):
-        return int(eval(self.config.get('DATARETRIEVAL', 'real_time_buf')))
+    def get_data_store_name(self, data_store_id) -> str:
+        return self.config.get('DATARETRIEVAL', data_store_id + '_name')
 
-    def persist_signals(self):
-        return [DataType[name] for name in self.config.get('DATARETRIEVAL', 'persist_signals').split()]
+    def get_data_store_persistency(self, data_store_id) -> Persistency:
+        return Persistency.Persistent if self.config.get('DATARETRIEVAL', data_store_id + '_persistency') == "persistent" \
+            else Persistency.Volatile
 
-    def persist_buf_length(self):
-        return int(eval(self.config.get('DATARETRIEVAL', 'persist_buf')))
+    def get_data_store_lifespan(self, data_store_id) -> LifeSpan:
+        return LifeSpan.Circular if self.config.get('DATARETRIEVAL', data_store_id + '_lifespan') == "circular" \
+            else LifeSpan.Linear
+
+    def get_data_store_signals(self, data_store_id) -> list[str]:
+        return self.config.get('DATARETRIEVAL', data_store_id + '_signals').split()
+
+    def get_data_store_buflen(self, data_store_id) -> int:
+        return eval(self.config.get('DATARETRIEVAL', data_store_id + '_buflen'))
+
+    def get_data_store_db(self, data_store_id) -> str:
+        return self.config.get('DATARETRIEVAL', data_store_id + '_db')
 
     def persist_interval_minutes(self):
         return int(self.config.get('SCHEDULER', 'persist_interval_minutes'))

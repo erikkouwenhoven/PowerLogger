@@ -13,12 +13,15 @@ def initializeLogging(pathToFile):
         print('Directory {} aangemaakt'.format(pathToFile))  # Qt is nog niet in de lucht, dus geen QMessageBox
     filename = Settings().logging_filename()
     filepath = os.path.join(pathToFile, filename)
-    logging.basicConfig(level=logging.DEBUG,
-                        format='%(name)s %(asctime)s %(levelname)-8s %(message)s',
-                        datefmt='%m-%d %H:%M:%S',
-                        filename=filepath,
-                        filemode='w')
-    logging.getLogger().addHandler(RotatingFileHandler(filepath, maxBytes=100000, backupCount=10))
+    logging.getLogger().setLevel(logging.DEBUG)
+    handler = logging.handlers.RotatingFileHandler(filepath,
+                                                   mode='w',
+                                                   maxBytes=1000000,
+                                                   backupCount=30)
+    formatter = logging.Formatter('%(asctime)s %(levelname)-8s %(message)s')
+    handler.setFormatter(formatter)
+    logging.getLogger().addHandler(handler)
+
     logging.getLogger("PyQt6").setLevel(logging.CRITICAL)
     logging.getLogger('matplotlib').setLevel(logging.CRITICAL)
     logging.getLogger("apscheduler").setLevel(logging.DEBUG)

@@ -32,16 +32,18 @@ class SerialReader:
         except serial.SerialException:
             logging.error("SerialException on initialization")
 
-    def runContinuously(self, callback):
-        if self.port:
-            self.stop_running = False
-            while self.stop_running is False:
-                try:
-                    line = self.port.readline()
-                    callback(line)
-                except serial.SerialException:
-                    logging.error("SerialException while reading")
-
+    # def runContinuously(self, callback):
+    #     if self.port:
+    #         self.stop_running = False
+    #         while self.stop_running is False:
+    #             try:
+    #                 line = self.port.readline()
+    #                 logging.debug(f"Serial data: {line}")
+    #                 print(f"Serial data: {line}")
+    #                 callback(line)
+    #             except serial.SerialException:
+    #                 logging.error("SerialException while reading")
+    #
     def getLine(self):
         if self.port:
             try:
@@ -50,6 +52,6 @@ class SerialReader:
             except serial.SerialException:
                 logging.error("SerialException while reading")
 
-    def stopRunning(self):
-        assert self.stop_running is False
-        self.stop_running = True
+    # def stopRunning(self):
+    #     assert self.stop_running is False
+    #     self.stop_running = True

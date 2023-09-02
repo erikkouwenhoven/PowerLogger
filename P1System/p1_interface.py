@@ -1,4 +1,7 @@
+from typing import Optional
 from P1System.interpreter import Interpreter
+from P1System.serial_settings import SerialSettings
+from P1System.data_classes import P1DataType
 
 
 class P1Interface:
@@ -40,9 +43,9 @@ class P1Interface:
             getSample():            returns latest sample
     """
 
-    def __init__(self, serial_settings, p1ValueTypes):
-        self.reqValues = p1ValueTypes
-        self.interpreter = Interpreter(serial_settings)
+    def __init__(self, p1_value_types: Optional[list[P1DataType]] = None):
+        self.reqValues = P1DataType.all_poss() if p1_value_types is None else p1_value_types
+        self.interpreter = Interpreter(SerialSettings())
         self.sample = None
         self.interval = None
         self.postSampleCB = None
@@ -52,7 +55,7 @@ class P1Interface:
         self.interpreter.sync_sample()
         if postSampleCB:
             self.postSampleCB = postSampleCB
-        self.interpreter.runContinuously(self.reqValues, self.sampleComplete)
+        self.interpreter.runContinuously(self.reqValues, self._sampleComplete)
 
     def singleShot(self):
         self.interpreter.sync_sample()
@@ -62,13 +65,13 @@ class P1Interface:
     def stop(self):
         self.interpreter.stop_running()
 
-    def sampleComplete(self, sample):
-        self.sample = sample
-        if self.postSampleCB:
-            self.postSampleCB()
-
     def getSample(self):
         return self.sample
 
     def getRawLines(self):
         return self.interpreter.getRawLines()
+
+    def _sampleComplete(self, sample):
+        self.sample = sample
+        if self.postSampleCB:
+            self.postSampleCB()
