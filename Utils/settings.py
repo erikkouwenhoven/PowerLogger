@@ -60,11 +60,20 @@ class Settings:
     def get_data_store_db(self, data_store_id) -> str:
         return self.config.get('DATARETRIEVAL', data_store_id + '_db')
 
-    def persist_interval_minutes(self):
-        return int(self.config.get('SCHEDULER', 'persist_interval_minutes'))
+    def scheduled_jobs(self) -> list[str]:
+        return self.config.get('SCHEDULER', 'scheduled_jobs').split()
 
-    def persist_delay_minutes(self):
-        return int(self.config.get('SCHEDULER', 'persist_delay_minutes'))
+    def interval_minutes(self, job_id) -> int:
+        return int(self.config.get('SCHEDULER', job_id + '_interval_minutes'))
+
+    def start_delay_minutes(self, job_id) -> int:
+        return int(self.config.get('SCHEDULER', job_id + '_start_delay_minutes'))
+
+    def source(self, job_id) -> str:
+        return self.config.get('SCHEDULER', job_id + '_source')
+
+    def destination(self, job_id) -> str:
+        return self.config.get('SCHEDULER', job_id + '_destination')
 
     def data_dir_name(self):
         return self.config.get('PATHS', 'data')
@@ -78,3 +87,8 @@ class Settings:
     def logging_filename(self):
         return self.config.get('PATHS', 'logfile')
 
+    def get_shift_in_seconds(self):
+        return float(self.config.get('PROCESSING', 'shift_in_seconds'))
+
+    def get_signal_to_shift(self) -> str:
+        return self.config.get('PROCESSING', 'signal_to_shift')

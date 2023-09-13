@@ -1,4 +1,6 @@
 import logging
+from datetime import datetime
+from typing import Optional, Callable
 from P1System.data_classes import P1DataType, P1Sample
 from P1System.data_classes import P1Value
 from P1System.serial_reader import SerialReader
@@ -37,8 +39,11 @@ class Interpreter:
 
     def __init__(self, serial_settings: SerialSettings):
         self.reader: SerialReader = SerialReader(serial_settings)
-        self.stop_running = False
-        self.rawLines = []
+        self._stop_running: bool = False
+        self._raw_lines: list[str] = []
+        self.start_time: Optional[datetime] = None
+        self.num_samples: Optional[int] = None
+        self.sampling_period: Optional[float] = None
 
     def sync_sample(self):
         line = self.reader.getLine()
@@ -48,9 +53,9 @@ class Interpreter:
     def get_sample(self, requested_values) -> P1Sample:
         sample = P1Sample(requested_values)
         line = self.reader.getLine()
-        self.rawLines.clear()
+        self._raw_lines.clear()
         while line and self.startTelegram not in line:
-            self.rawLines.append(line)
+            self._raw_lines.append(line)
             reset, value = self.decode(line, requested_values)
             assert reset is False
             if value:
@@ -58,13 +63,19 @@ class Interpreter:
             line = self.reader.getLine()
         return sample
 
-    def runContinuously(self, requested_values: list[str], post_sample_cb: classmethod):
+    def runContinuously(self, requested_values: list[str], post_sample_cb: Callable[[P1Sample], None]):
         logging.info(f"Start continuous sampling for values {requested_values}")
-        self.stop_running = False
-        while self.stop_running is False:
+        self._stop_running = False
+        self.start_time = datetime.now()
+        self.num_samples = 0
+        while self._stop_running is False:
             sample = self.get_sample(requested_values)
+            self.num_samples += 1
             if post_sample_cb:
                 post_sample_cb(sample)
+
+    def stop_running(self):
+        self._stop_running = True
 
     def decode(self, line: bytes, requested_values: list[str]) -> (bool, float):
         if self.startTelegram in line:
@@ -104,5 +115,10 @@ class Interpreter:
             retVal.setValue(encoded_str)
         return retVal
 
-    def getRawLines(self):
-        return self.rawLines
+    def get_raw_lines(self):
+        return self._raw_lines
+
+    def get_sampling_period(self, update: bool = False) -> float:
+        if self.sampling_period is None or update is True:
+            self.sampling_period = (datetime.now() - self.start_time).total_seconds() / self.num_samples
+        return self.sampling_period

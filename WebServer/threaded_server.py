@@ -42,6 +42,7 @@ def MakeHandlerClass(init_args):
             "/data_stores": "get_data_stores",
             "/data_store_info": "get_data_store_info",
             "/get_data": "get_data",
+            "/shift_info": "get_shift_info",
         }
 
         def __init__(self, *args, **kwargs):

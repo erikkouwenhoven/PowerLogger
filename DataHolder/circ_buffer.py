@@ -1,6 +1,8 @@
 from datetime import datetime
 import logging
 from abc import ABCMeta, abstractmethod
+import math
+from DataHolder.shift_info import ShiftInfo
 from DataHolder.db_interface import DBInterface
 from DataHolder.data_types import DataType
 from DataHolder.data_item import DataItem, DataItemSpec
@@ -69,10 +71,12 @@ class CircularStorage(metaclass=ABCMeta):
         return [self.get_data_item(self.min_time_index()).get_timestamp(),
                 self.get_data_item(self.last_index()).get_timestamp()]
 
-    def serialize(self) -> dict:
+    def serialize(self, signals: list[DataType] = None) -> dict:
         result = {"timestamp": [self.get_data_item(idx).get_timestamp() for idx in self.timedIndexes()]}
-        for elem in self.data_item_spec.get_elements():
-            result[str(elem)] = [self.get_data_item(idx).get_value(elem) for idx in self.timedIndexes()]
+        if signals is None:
+            signals = self.data_item_spec.get_elements()
+        for signal in signals:
+            result[signal] = [self.get_data_item(idx).get_value(signal) for idx in self.timedIndexes()]
         result["units"] = {str(data_type): self.data_item_spec.get_unit(data_type) for data_type in self.data_item_spec.get_elements()}
         return result
 
@@ -91,18 +95,30 @@ class CircularStorage(metaclass=ABCMeta):
             for idx in range(to_index + 1):
                 yield idx
 
-    def average(self, from_time: datetime, to_time: datetime, selected_signals: list[DataType]) -> DataItem:
+    def average(self, from_time: datetime, to_time: datetime, selected_signals: list[DataType], shift_info: ShiftInfo) -> DataItem:
         sample = DataItem(self.data_item_spec, timestamp=0.5*(datetime.timestamp(from_time) + datetime.timestamp(to_time)))
-        logging.debug(f"average: from={from_time} to={to_time}")
-        logging.debug(f"avg time = {datetime.fromtimestamp(sample.get_timestamp())}")
+        logging.debug(f"average: from = {from_time}, to = {to_time}, avg time = {datetime.fromtimestamp(sample.get_timestamp())}")
         indexes = [idx for idx in self.timedIndexes(self.index_from_time(from_time), self.index_from_time(to_time))]
+        int_part = int(math.floor(shift_info.shift_in_samples()))
+        float_part = shift_info.shift_in_samples() - int_part
         for signal in selected_signals:
             assert signal in self.data_item_spec.get_elements()
             cumsum = 0.0
+            cum_count = 0
             for idx in indexes:
-                if (value := self.get_data_item(idx).get_value(signal)) is not None:
-                    cumsum += value
-            sample.set_value(signal, cumsum/len(indexes))
+                if signal == shift_info.signal_to_shift:
+                    if 0 < idx + int_part < self.length() - 1 - 1:
+                        try:
+                            cumsum += (1 - float_part) * self.get_data_item(idx + int_part).get_value(signal) +\
+                                      float_part * self.get_data_item(idx + int_part + 1).get_value(signal)
+                            cum_count += 1
+                        except TypeError:  # catch a None-type
+                            pass
+                else:
+                    if (value := self.get_data_item(idx).get_value(signal)) is not None:
+                        cumsum += value
+                        cum_count += 1
+            sample.set_value(signal, cumsum/cum_count)
         logging.debug(f"averaging count: {len(indexes)}")
         return sample
 
@@ -115,18 +131,24 @@ class CircularStorage(metaclass=ABCMeta):
             iter += 1
             if iter % 1000 == 0:
                 logging.debug(f"iter = {iter}")
-#            m = int((lo + hi) / 2)
             m = (int((hi - lo) % self.length() / 2) + lo) % self.length()
             curr_value = self.get_data_item(m).get_timestamp()
             if curr_value < timestamp:
+                if lo == m:
+                    return lo if timestamp - self.get_data_item(lo).get_timestamp() < self.get_data_item(hi).get_timestamp() - timestamp else hi
                 lo = m
             elif curr_value > timestamp:
+                if hi == m:
+                    return lo if timestamp - self.get_data_item(lo).get_timestamp() < self.get_data_item(hi).get_timestamp() - timestamp else hi
                 hi = m
             elif curr_value == timestamp:
                 return m
+            else:
+                logging.debug(f"Erroneous exit: lo={lo} hi={hi} timestamp={timestamp}")
+                return m
             if abs(hi - lo) <= 1:
-                return lo
-        logging.debug(f"Erroneous exit: lo={lo} hi={hi} timestamp={timestamp}")
+                logging.debug(f"Unexpected exit: lo={lo} hi={hi} timestamp={timestamp}")
+                return lo if timestamp - self.get_data_item(lo).get_timestamp() < self.get_data_item(hi).get_timestamp() - timestamp else hi
 
     def dump(self) -> list[str]:
         result = [f"Dump of circular buffer",
@@ -185,11 +207,12 @@ class CircularPersistentStorage(CircularStorage):
         array = item.to_array(self.data_item_spec)
         self.db_interface.insert_data_item(idx, self.data_item_spec, array)
 
-    def serialize(self):  # override as element-wise data retrieval would be too slow in database implementation
+    def serialize(self, signals: list[DataType] = None) -> dict:  # override as element-wise data retrieval would be too slow in database implementation
         all_data = self.db_interface.get_all_data()
         res = {}
         for item in all_data:
-            res[item] = [all_data[item][idx] for idx in self.timedIndexes()]
+            if item == "units" or item == "timestamp" or (signals is not None and item in signals):
+                res[item] = [all_data[item][idx] for idx in self.timedIndexes()]
         res["units"] = {str(data_type): self.data_item_spec.get_unit(data_type) for data_type in self.data_item_spec.get_elements()}
         return res
 
@@ -201,12 +224,13 @@ if __name__ == "__main__":
     elements = ["A", "B", "C"]
     buf = CircularMemBuf(10, elements)
     start = datetime.now()
-    for i in range(10):
+    for i in range(13):
         t = start + timedelta(seconds=i)
         item = DataItem(DataItemSpec.from_names(elements), timestamp=datetime.timestamp(t))
         for element in elements:
             item.set_value(element, i)
         buf.add_data_item(item)
-    req = start + timedelta(seconds=4)
+    req = start + timedelta(seconds=-14.2)
     res = buf.index_from_time(req)
-    print(f"res = {res} buf[res] = {buf.data[res]} req={req}")
+    print(buf)
+    print(f"res = {res} buf = {buf.data[res].timestamp} req={datetime.timestamp(req)}")

@@ -56,6 +56,11 @@ class DataItemSpec:
         except KeyError:
             raise RuntimeError
 
+    def datatype_from_name(self, name: str):
+        for data_type in self.elements:
+            if data_type == str:
+                return data_type
+
     @classmethod
     def from_names(cls, names: list[str]):
         return cls({name: None for name in names})

@@ -1,4 +1,5 @@
 from typing import Optional
+from P1System.data_classes import P1Sample
 from P1System.interpreter import Interpreter
 from P1System.serial_settings import SerialSettings
 from P1System.data_classes import P1DataType
@@ -46,7 +47,7 @@ class P1Interface:
     def __init__(self, p1_value_types: Optional[list[P1DataType]] = None):
         self.reqValues = P1DataType.all_poss() if p1_value_types is None else p1_value_types
         self.interpreter = Interpreter(SerialSettings())
-        self.sample = None
+        self.sample: Optional[P1Sample] = None
         self.interval = None
         self.postSampleCB = None
 
@@ -69,9 +70,12 @@ class P1Interface:
         return self.sample
 
     def getRawLines(self):
-        return self.interpreter.getRawLines()
+        return self.interpreter.get_raw_lines()
 
-    def _sampleComplete(self, sample):
+    def _sampleComplete(self, sample: P1Sample) -> None:
         self.sample = sample
         if self.postSampleCB:
             self.postSampleCB()
+
+    def get_sampling_period(self):
+        return self.interpreter.get_sampling_period()
