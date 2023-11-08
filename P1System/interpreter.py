@@ -32,7 +32,7 @@ class Interpreter:
         P1DataType.CURRENT_PRODUCTION_PHASE1: b"1-0:22.7.0",
         P1DataType.CURRENT_PRODUCTION_PHASE2: b"1-0:42.7.0",
         P1DataType.CURRENT_PRODUCTION_PHASE3: b"1-0:62.7.0",
-        P1DataType.USAGE_GAS: b"0-1:24.2",  # TODO levert twee waarden, tijd en kuub
+        P1DataType.CUMULATIVE_GAS: b"0-1:24.2",  # TODO levert twee waarden, tijd en kuub
     }
 
     startTelegram = b'XMX5LGBBFG1012622655'
@@ -90,17 +90,23 @@ class Interpreter:
                 pos = line.find(self.obisCode[req])
                 if pos != -1:
     #                print(f"Found {req} at pos {pos}")
-                    bracketOpen = line.rfind(b'(', pos)  # Last occurence, for gas
+                    bracketOpen = line.rfind(b'(', pos)  # Last occurrence, for gas
                     bracketClose = line.rfind(b')', pos)
     #                print("haakje open {} haakje dicht {}".format(bracketOpen, bracketClose))
                     if bracketOpen != -1 and bracketClose != -1:
-                        value = self.decode_value(req, line[bracketOpen + 1:bracketClose])
+                        value = self.decode_value(req, line[bracketOpen + 1:bracketClose], self.second_value(line, bracketOpen))
                         if value:
                             return reset, value
         return False, None
 
     @staticmethod
-    def decode_value(datatype, encoded_str):
+    def second_value(line: bytes, bracketOpen: int):
+        if (bracketOpen_2 := line.find(b'(')) != bracketOpen:
+            bracketClose_2 = line.find(b')')
+            return line[bracketOpen_2 + 1:bracketClose_2]
+
+    @staticmethod
+    def decode_value(datatype, encoded_str, extra):
         retVal = P1Value(datatype)
         split = encoded_str.find(b'*')
         if split != -1:
@@ -113,6 +119,8 @@ class Interpreter:
             retVal.setValue(value, unit=unit)
         else:
             retVal.setValue(encoded_str)
+        if extra:
+            retVal.set_extra_timestamp(extra)
         return retVal
 
     def get_raw_lines(self):

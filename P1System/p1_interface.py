@@ -25,7 +25,7 @@ class P1Interface:
                 TARIFF
                 CURRENT_USAGE
                 CURRENT_PRODUCTION
-                USAGE_GAS
+                CUMULATIVE_GAS
 
         Methods:
             P1Reader(serialSettings, p1ValueTypes)
@@ -44,7 +44,7 @@ class P1Interface:
             getSample():            returns latest sample
     """
 
-    def __init__(self, p1_value_types: Optional[list[P1DataType]] = None):
+    def __init__(self, p1_value_types: list[P1DataType]):
         self.reqValues = P1DataType.all_poss() if p1_value_types is None else p1_value_types
         self.interpreter = Interpreter(SerialSettings())
         self.sample: Optional[P1Sample] = None
@@ -69,7 +69,7 @@ class P1Interface:
     def getSample(self):
         return self.sample
 
-    def getRawLines(self):
+    def get_raw_lines(self):
         return self.interpreter.get_raw_lines()
 
     def _sampleComplete(self, sample: P1Sample) -> None:

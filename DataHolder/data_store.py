@@ -1,6 +1,6 @@
 from typing import Optional, Any
 from DataHolder.buffer_attrs import Persistency, LifeSpan
-from DataHolder.circ_buffer import CircularStorage
+from DataHolder.storage import Storage
 
 
 class DataStore:
@@ -19,7 +19,7 @@ class DataStore:
             assert self.db is not None
         if self.lifespan == LifeSpan.Circular:
             assert self.buf_len > 0
-        self.data: Optional[CircularStorage] = None
+        self.data: Optional[Storage] = None
 
     def data_store_info(self) -> dict[str, Any]:
         return {

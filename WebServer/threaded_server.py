@@ -43,6 +43,7 @@ def MakeHandlerClass(init_args):
             "/data_store_info": "get_data_store_info",
             "/get_data": "get_data",
             "/shift_info": "get_shift_info",
+            "/system_info": "get_system_info",
         }
 
         def __init__(self, *args, **kwargs):
@@ -66,18 +67,18 @@ def MakeHandlerClass(init_args):
                 view = getattr(request_handler, self.URL_DATA_VIEWS[parsed.path])
                 result = view(parsed.query)
 #                logging.debug(f"result from do_GET: {result}")
-                self.wfile.write(bytes(json.dumps(result), 'utf-8'))
+                self.wfile.write(json.dumps(result).encode('utf-8'))
             elif parsed.path in self.URL_BROWSER_VIEWS:
                 logging.debug(f"GET request is in URL_BROWSER_VIEWS")
-                # self.send_header("Content-type", "text/html")
-                # self.end_headers()
+                self.send_header("Content-type", "text/html")
+                self.end_headers()
                 self.wfile.write(b"<html><head><title>Power logger</title></head>")
                 self.wfile.write(b"<body><p>Erik Kouwenhoven, 2023</p>")
                 self.wfile.write(b"<p>You accessed path: %b</p>" % self.path.encode())
                 view = getattr(request_handler, self.URL_BROWSER_VIEWS[parsed.path])
                 result = view()
                 for line in result:
-                    self.wfile.write(f"{line}<br>".encode('utf-8'))
+                    self.wfile.write(line + b"<br>")
                 self.wfile.write(b"</body></html>")
             else:
                 logging.error(f"Invalid request {self.path}")

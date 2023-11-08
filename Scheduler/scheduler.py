@@ -10,8 +10,6 @@ class Scheduler:
     Initializes scheduled events, and receives and handles events.
     """
 
-    c_PERSIST_JOB_ID = 'persist'
-
     def __init__(self, processor: Processor):
         self.processor = processor
         self.scheduler = BackgroundScheduler(timezone="Europe/Berlin")
@@ -27,9 +25,13 @@ class Scheduler:
         scheduler.start()
 
     def exec_job(self, **kwargs):
-        job = self.scheduler.get_job(job_id=kwargs['id'])
+        job_id = kwargs['id']
+        job = self.scheduler.get_job(job_id=job_id)
         interval = job.trigger.interval
-        self.processor.transfer_derived_value(source=kwargs['source'], dest=kwargs['dest'], interval=interval)
+        if job_id == "persist":
+            self.processor.transfer_derived_value(source=kwargs['source'], dest=kwargs['dest'], interval=interval)
+        else:
+            raise NotImplementedError
 
 
 class ScheduledJob:

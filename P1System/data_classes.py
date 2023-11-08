@@ -1,5 +1,5 @@
 from enum import Enum, auto
-from typing import Optional
+from typing import Optional, Union
 from datetime import datetime
 
 
@@ -19,7 +19,7 @@ class P1DataType(Enum):
     CURRENT_PRODUCTION_PHASE1 = auto()
     CURRENT_PRODUCTION_PHASE2 = auto()
     CURRENT_PRODUCTION_PHASE3 = auto()
-    USAGE_GAS = auto()
+    CUMULATIVE_GAS = auto()
 
     def __str__(self):
         return self.name
@@ -41,18 +41,31 @@ class P1Value:
     """
     def __init__(self, datatype: P1DataType):
         self.dataType = datatype
-        self.value: Optional[float] = None
-        self.unit: Optional[str] = None
+        self.value: Optional[float | datetime] = None
+        self.unit: Optional[bytes] = None
+        self.extra_timestamp: Optional[datetime] = None
 
-    def setValue(self, value: float, unit: str = None):
+    def setValue(self, value: Union[float, bytes], unit: bytes = None):
         if value is not None:
             if self.dataType == P1DataType.TIMESTAMP:
-                self.value = datetime.strptime(value.decode()[:12], "%y%m%d%H%M%S")
+                # assert type(value) == bytes
+                self.value = self.decode_time(value)
             else:
-                self.value = float(value)
+                # assert type(value) == float
+                self.value = value
         else:
             self.value = None
         self.unit = unit
+
+    def set_extra_timestamp(self, extra: bytes):
+        self.extra_timestamp = self.decode_time(extra)
+
+    def get_extra_timestamp(self) -> datetime:
+        return self.extra_timestamp
+
+    @staticmethod
+    def decode_time(value: bytes) -> datetime:
+        return datetime.strptime(value.decode()[:12], "%y%m%d%H%M%S")
 
 
 class P1Sample:
@@ -60,27 +73,49 @@ class P1Sample:
         Contains one sample, i.e. a dict of Values
     """
     def __init__(self, datatypes: list[P1DataType]):
-        self.data = {datatypes[i]: None for i in range(len(datatypes))}
+        self.data: dict[P1DataType, P1Value] = {datatypes[i]: None for i in range(len(datatypes))}
 
     def addValue(self, value: P1Value):
-        self.data[value.dataType] = (value.value, value.unit)
+        self.data[value.dataType] = value
 
-    def getValue(self, datatype: P1DataType):
+    def getValue(self, datatype: P1DataType) -> P1Value:
         return self.data[datatype]
 
-    def getValueFromName(self, name: str):
+    def getValueFromName(self, name: str) -> P1Value:
         return self.data[P1DataType.get_from_name(name)]
 
-    def get_data_types(self):
+    def get_data_types(self) -> list[P1DataType]:
         return [key for key in self.data if key != P1DataType.TIMESTAMP]
 
-    def get_data_types_units(self) -> dict[str, str]:
+    def get_timestamp(self) -> Optional[datetime]:
+        try:
+            return self.data[P1DataType.TIMESTAMP].value
+        except KeyError:
+            return None
+
+    def get_extra_value_signals(self) -> list[P1DataType]:
+        res = []
+        for key in self.data:
+            if value := self.data[key]:
+                try:
+                    if value.get_extra_timestamp() is not None:
+                        res.append(key)
+                except (AttributeError, IndexError):
+                    pass
+        return res
+
+    def get_extra_value_signal(self) -> P1DataType:
+        if extra_signals := self.get_extra_value_signals():
+            if len(extra_signals) > 1:
+                raise NotImplementedError
+            return extra_signals[0]
+
+    def get_data_types_units(self, signals) -> dict[str, str]:
         res = {}
         for key in self.data:
-            if key != P1DataType.TIMESTAMP:
+            if key.name in signals and key != P1DataType.TIMESTAMP:
                 if value := self.data[key]:
-                    unit = value[1].decode() if value[1] else ""
-                    res[key.name] = unit
+                    res[key.name] = value.unit.decode('utf-8')
                 else:
                     res[key.name] = None
         return res

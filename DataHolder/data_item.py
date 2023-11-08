@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import Optional, Union
 from datetime import datetime
 from DataHolder.data_types import DataType
@@ -54,11 +55,11 @@ class DataItemSpec:
         try:
             return self.elements[data_type]
         except KeyError:
-            raise RuntimeError
+            raise SystemExit(f"{data_type} not found, only got {self.get_elements()}")
 
     def datatype_from_name(self, name: str):
         for data_type in self.elements:
-            if data_type == str:
+            if data_type == name:
                 return data_type
 
     @classmethod
@@ -66,8 +67,9 @@ class DataItemSpec:
         return cls({name: None for name in names})
 
     @classmethod
-    def from_p1sample(cls, p1sample: P1Sample):
-        return cls(p1sample.get_data_types_units())
+    def from_p1sample(cls, p1sample: P1Sample, signals: list[str]):
+        result = p1sample.get_data_types_units(signals)
+        return cls(result)
 
 
 class DataItem:
@@ -86,7 +88,7 @@ class DataItem:
         unit, idx = self.data_item_spec.get_element(element)
         return f"{self.item_data[idx + 1]} {unit}"
 
-    def set_value(self, element: DataType, value: float):
+    def set_value(self, element: str | DataType, value: float):
         unit, idx = self.data_item_spec.get_element(element)
         self.item_data[idx + 1] = value
 
@@ -96,6 +98,10 @@ class DataItem:
         assert idx == len(self.item_data) - 1
         self.item_data.append(value)
 
+    def merge(self, other: DataItem):
+        for element in other.data_item_spec.get_elements():
+            self.add_value(element, other.get_value(element), other.data_item_spec.get_unit(element))
+
     def get_timestamp(self) -> float:
         return self.timestamp
 
@@ -104,13 +110,21 @@ class DataItem:
             return datetime.fromtimestamp(self.timestamp).strftime("%d-%m-%Y, %H:%M:%S")
 
     @classmethod
-    def from_p1sample(cls, p1sample: P1Sample):
+    def from_p1sample(cls, p1sample: P1Sample, signals: list[str]):
         if (value := p1sample.getValue(P1DataType.TIMESTAMP)) is not None:
-            data_item = cls(DataItemSpec.from_p1sample(p1sample), timestamp=value[0].timestamp())
+            data_item = cls(DataItemSpec.from_p1sample(p1sample, signals), timestamp=datetime.timestamp(value.value))
             for element in data_item.data_item_spec.get_elements():
                 unit, idx = data_item.data_item_spec.get_element(element)
                 if (value := p1sample.getValueFromName(element)) is not None:
-                    data_item.item_data[idx + 1] = value[0]
+                    data_item.item_data[idx + 1] = value.value
+            return data_item
+
+    @classmethod
+    def from_p1sample_extra_timestamp(cls, p1sample: P1Sample, extra_signal: str):
+        if extra_value := p1sample.getValueFromName(extra_signal):
+            data_item = cls(DataItemSpec.from_p1sample(p1sample, [extra_signal]),
+                            timestamp=datetime.timestamp(extra_value.get_extra_timestamp()))
+            data_item.set_value(str(extra_signal), p1sample.getValueFromName(extra_signal).value)
             return data_item
 
     @classmethod

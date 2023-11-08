@@ -1,5 +1,4 @@
 from Utils.settings import Settings
-from DataHolder.data_types import DataType
 
 
 class ShiftInfo:

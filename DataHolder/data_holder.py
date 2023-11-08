@@ -1,10 +1,11 @@
-import logging
+from datetime import timedelta
 from Utils.settings import Settings
-from DataHolder.shift_info import ShiftInfo
-from DataHolder.circ_buffer import CircularMemBuf, CircularPersistentStorage, DataItem
+from Application.Models.shift_info import ShiftInfo
+from DataHolder.storage import CircularMemStorage, CircularPersistentStorage, LinearPersistentStorage, DataItem
 from DataHolder.db_interface import DBInterface
 from DataHolder.buffer_attrs import Persistency, LifeSpan
 from DataHolder.data_store import DataStore
+from DataHolder.data_types import DataType
 
 
 class DataHolder:
@@ -39,12 +40,18 @@ class DataHolder:
             signals = Settings().get_data_store_signals(data_store_id)
             buf_len = Settings().get_data_store_buflen(data_store_id) if lifespan == LifeSpan.Circular else 0
             db = Settings().get_data_store_db(data_store_id) if persistency == Persistency.Persistent else None
+            print(f"data_store_id = {data_store_id}, signals = {signals}")
             data_store = DataStore(name=name, persistency=persistency, lifespan=lifespan, signals=signals, buf_len=buf_len, db=db)
-            if persistency == Persistency.Persistent:
-                db_interface = DBInterface(signals)
-                data_store.data = CircularPersistentStorage(buf_len, signals, db_interface)
+            if persistency == Persistency.Persistent and lifespan == LifeSpan.Circular:
+                db_interface = DBInterface(name, signals)
+                data_store.data = CircularPersistentStorage(buf_len, signals, db_interface, table=name)
+            elif persistency == Persistency.Volatile and lifespan == LifeSpan.Circular:
+                data_store.data = CircularMemStorage(buf_len, signals)
+            elif persistency == Persistency.Persistent and lifespan == LifeSpan.Linear:
+                db_interface = DBInterface(name, signals)
+                data_store.data = LinearPersistentStorage(signals, db_interface, table=name)
             else:
-                data_store.data = CircularMemBuf(buf_len, signals)
+                raise NotImplementedError
             data_stores.append(data_store)
         return data_stores
 

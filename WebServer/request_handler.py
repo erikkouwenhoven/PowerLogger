@@ -1,5 +1,6 @@
 from typing import Any
-from DataHolder.shift_info import ShiftInfo
+from Application.Models.shift_info import ShiftInfo
+from Utils.system_info import SystemInfo
 
 
 class RequestHandler:
@@ -20,7 +21,6 @@ class RequestHandler:
         dict_args = self.convert_args(args)
         data_store = self.processor.data_holder.data_store(dict_args['data_store_name'])
         signals = dict_args['signals'].split(',')
-        # datatype_from_name
         return data_store.data.serialize(signals)
 
     def get_data_stores(self, *args):
@@ -32,6 +32,9 @@ class RequestHandler:
     def get_shift_info(self, *args):
         shift_info = ShiftInfo()
         return {"shift signal": shift_info.signal_to_shift, "shift in seconds": shift_info.shift_in_seconds}
+
+    def get_system_info(self, *args):
+        return SystemInfo(self.processor).get_info()
 
     @staticmethod
     def convert_args(args: str) -> dict[str, str]:

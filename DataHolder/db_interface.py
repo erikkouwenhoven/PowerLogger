@@ -8,28 +8,37 @@ from DataHolder.data_item import DataItemSpec
 
 class DBInterface:
 
-    def __init__(self, signals: list[str]):
-        dbFilename = os.path.join(Settings().data_dir_name(), Settings().db_filename())
+    def __init__(self, table: str, signals: list[str]):
+        db_file_name = self.db_file_name()
         try:
-            dburi = 'file:{}?mode=rw'.format(pathname2url(dbFilename))
+            dburi = 'file:{}?mode=rw'.format(pathname2url(db_file_name))
             self.con = sqlite3.connect(dburi, uri=True, check_same_thread=False)
-            logging.info(f"Database {dbFilename} found")
+            logging.info(f"Database {db_file_name} found")
         except sqlite3.OperationalError:  # does not exist
-            self.con = self.createDB(dbFilename, signals)
-        if self.check_columns(table="data", columns=['timestamp'] + [str(signal) for signal in signals]) is False:
-            logging.error("Existing database has different columns")
+            self.con = self.createDB(db_file_name)
+        if table not in self.get_table_names():
+            self.createTable(table, signals)
+        else:
+            if self.check_columns(table=table, columns=['timestamp'] + [str(signal) for signal in signals]) is False:
+                logging.error("Existing database has different columns")
 
     @staticmethod
-    def createDB(dbFilename: str, signals: list[str]):
+    def createDB(db_file_name: str):
         logging.info("Creating database")
-        con = sqlite3.connect(dbFilename, check_same_thread=False)
-        cur = con.cursor()
-        s = "CREATE TABLE data (timestamp int" +\
+        con = sqlite3.connect(db_file_name, check_same_thread=False)
+        return con
+
+    def createTable(self, table: str, signals: list[str]):
+        cur = self.con.cursor()
+        s = f"CREATE TABLE IF NOT EXISTS {table} (timestamp int" +\
             "".join([f", {signal} real" for signal in signals]) + ")"
         logging.debug(f"sql create table: {s}")
         cur.execute(s)
-        con.commit()
-        return con
+        self.con.commit()
+
+    @staticmethod
+    def db_file_name() -> str:
+        return os.path.join(Settings().data_dir_name(), Settings().db_filename())
 
     def check_columns(self, table: str, columns: list[str]) -> bool:
         logging.debug(f"Checking columns of database, table={table}, against used columns: {columns}")
@@ -38,6 +47,13 @@ class DBInterface:
                 return False
         return True
 
+    def get_table_names(self) -> list[str]:
+        cur = self.con.cursor()
+        cur.execute("SELECT name from sqlite_schema WHERE type='table'")
+        res = cur.fetchall()
+        logging.debug(f"table names: {res}")
+        return [item[0] for item in res]
+
     def get_column_names(self, table: str) -> list[str]:
         cur = self.con.cursor()
         cur.execute(f"pragma table_info({table})")
@@ -45,45 +61,46 @@ class DBInterface:
         logging.debug(f"pragma result: {res}")
         return [item[1] for item in res]
 
-    def get_count(self) -> int:
+    def get_count(self, table: str) -> int:
         cur = self.con.cursor()
         try:
-            cur.execute("SELECT COUNT(*) FROM data")
+            cur.execute(f"SELECT COUNT(*) FROM {table}")
         except sqlite3.OperationalError:
             return 0
         res = cur.fetchone()
         return res[0]
 
-    def get_data_items(self, idx: int, elements: list[str]):
+    def get_data_items(self, table: str, idx: int, elements: list[str]):
         cur = self.con.cursor()
         cur.execute("SELECT timestamp" +
                     "".join([f", {element}" for element in elements]) +
-                    " FROM data WHERE rowid=?", (idx+1,))  # sqlite rowid starts at 1
+                    f" FROM {table} WHERE rowid=?", (idx+1,))  # sqlite rowid starts at 1
         res = cur.fetchone()
         if res is None:
             res = [None] * (len(elements) + 1)
         return res
 
-    def insert_data_item(self, idx: int, data_item_spec: DataItemSpec, array: list[float]):
+    def insert_data_item(self, table: str, idx: int, data_item_spec: DataItemSpec, array: list[float]):
         cur = self.con.cursor()
-        cur.execute("UPDATE data SET timestamp=? " +
+        cur.execute(f"UPDATE {table} SET timestamp=? " +
                     "".join([f", {element}=?" for element in data_item_spec.get_elements()]) +
                     "WHERE rowid=?", array + [idx+1])
         self.con.commit()
 
-    def append_data_item(self, data_item_spec: DataItemSpec, array: list[float]):
+    def append_data_item(self, table: str, data_item_spec: DataItemSpec, array: list[float]):
         cur = self.con.cursor()
-        cur.execute("INSERT INTO data (timestamp" +
-                    "".join([f", {element}" for element in data_item_spec.get_elements()]) +
+        non_null_elements = [element for i, element in enumerate(data_item_spec.get_elements()) if array[i+1] is not None]
+        cur.execute(f"INSERT INTO {table} (timestamp" +
+                    "".join([f", {element}" for element in non_null_elements]) +
                     ") VALUES (" + str(array[0]) +
-                    "".join([f", {item}" for item in array[1:]]) + ")")
+                    "".join([f", {item}" for item in array[1:] if item is not None]) + ")")
         self.con.commit()
 
-    def get_all_data(self) -> dict[str, list[float]]:
+    def get_all_data(self, table: str) -> dict[str, list[float]]:
         cur = self.con.cursor()
-        cur.execute("SELECT * FROM data")
+        cur.execute(f"SELECT * FROM {table}")
         fetched = cur.fetchall()
-        res = {col: [] for col in self.get_column_names('data')}
+        res = {col: [] for col in self.get_column_names(table)}
         for i, values in enumerate(res.values()):
             for row in fetched:
                 values.append(row[i])
