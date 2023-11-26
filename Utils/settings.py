@@ -2,8 +2,11 @@ import os
 import configparser
 import serial
 from datetime import datetime
+from typing import List, Dict
 from DataHolder.buffer_attrs import Persistency, LifeSpan
+from DataHolder.data_types import DataType
 from P1System.data_classes import P1DataType
+from ZWaveSystem.data_classes import DataTypeZWave
 
 
 class Settings:
@@ -39,33 +42,36 @@ class Settings:
     def rs232Bytesize(self):
         return eval(self.config.get('RS232', 'bytesize'))
 
-    def get_measurement_p1_signals(self) -> list[P1DataType]:
+    def get_measurement_p1_signals(self) -> List[P1DataType]:
         return self.config.get('DATARETRIEVAL', 'p1_signals').split()
 
-    def get_data_stores(self): # -> list[str]:
-        return self.config.get('DATARETRIEVAL', 'data_stores').split()
+    def get_data_stores(self): # -> List[str]:
+        return self.config.get('DATASTORAGE', 'data_stores').split()
+
+    def get_P1_data_store(self):
+        return self.config.get('DATASTORAGE', 'p1_data_store')
 
     def get_data_store_name(self, data_store_id) -> str:
-        return self.config.get('DATARETRIEVAL', data_store_id + '_name')
+        return self.config.get('DATASTORAGE', data_store_id + '_name')
 
     def get_data_store_persistency(self, data_store_id) -> Persistency:
-        return Persistency.Persistent if self.config.get('DATARETRIEVAL', data_store_id + '_persistency') == "persistent" \
+        return Persistency.Persistent if self.config.get('DATASTORAGE', data_store_id + '_persistency') == "persistent" \
             else Persistency.Volatile
 
     def get_data_store_lifespan(self, data_store_id) -> LifeSpan:
-        return LifeSpan.Circular if self.config.get('DATARETRIEVAL', data_store_id + '_lifespan') == "circular" \
+        return LifeSpan.Circular if self.config.get('DATASTORAGE', data_store_id + '_lifespan') == "circular" \
             else LifeSpan.Linear
 
-    def get_data_store_signals(self, data_store_id): # -> list[str]:
-        return self.config.get('DATARETRIEVAL', data_store_id + '_signals').split()
+    def get_data_store_signals(self, data_store_id): # -> List[str]:
+        return self.config.get('DATASTORAGE', data_store_id + '_signals').split()
 
     def get_data_store_buflen(self, data_store_id) -> int:
-        return eval(self.config.get('DATARETRIEVAL', data_store_id + '_buflen'))
+        return eval(self.config.get('DATASTORAGE', data_store_id + '_buflen'))
 
     def get_data_store_db(self, data_store_id) -> str:
-        return self.config.get('DATARETRIEVAL', data_store_id + '_db')
+        return self.config.get('DATASTORAGE', data_store_id + '_db')
 
-    def scheduled_jobs(self): # -> list[str]:
+    def scheduled_jobs(self): # -> List[str]:
         return self.config.get('SCHEDULER', 'scheduled_jobs').split()
 
     def interval_minutes(self, job_id) -> int:
@@ -109,6 +115,21 @@ class Settings:
     def get_signal_to_shift(self) -> str:
         return self.config.get('PROCESSING', 'signal_to_shift')
 
+    def get_differential_source_signal(self) -> DataType:
+        return self.config.get('PROCESSING', 'differential_source_signal')
+
+    def get_filtered_data_store(self) -> str:
+        return self.config.get('PROCESSING', 'filtered_data_store')
+
+    def get_differential_dest_data_store(self) -> str:
+        return self.config.get('PROCESSING', 'differential_dest_data_store')
+
+    def get_differential_dest_signal(self) -> str:
+        return self.config.get('PROCESSING', 'differential_dest_signal')
+
+    def get_differential_dest_unit(self) -> str:
+        return self.config.get('PROCESSING', 'differential_dest_unit')
+
     def get_config(self):
         if os.name == 'nt':
             return self.config.get('ZWAVE', 'configpath_windows')
@@ -120,3 +141,26 @@ class Settings:
             return self.config.get('ZWAVE', 'device_windows')
         else:
             return self.config.get('ZWAVE', 'device_linux')
+
+    def get_zwave_subscriptions(self) -> Dict[int, List[int]]:
+        res = {}
+        for subscr in self.config.get('ZWAVE', 'subscriptions').split('\n'):
+            split_res = subscr.split(':')
+            node = int(split_res[0])
+            val_ids = [int(val) for val in split_res[1].split(',')]
+            res[node] = val_ids
+        return res
+
+    def get_ZWave_data_store(self, node: int, data_types: List[DataTypeZWave]) -> str:
+        assert len(data_types) == 1  # Implemented for single data type
+        data_type = data_types[0]
+        if node == 2 and data_type == DataTypeZWave.TEMPERATURE:
+            return self.get_data_store_name('zwave_node2_temperature')
+        elif node == 2 and data_type == DataTypeZWave.RELATIVE_HUMIDITY:
+            return self.get_data_store_name('zwave_node2_humid')
+        elif node == 3 and data_type == DataTypeZWave.TEMPERATURE:
+            return self.get_data_store_name('zwave_node3_temperature')
+        elif node == 3 and data_type == DataTypeZWave.RELATIVE_HUMIDITY:
+            return self.get_data_store_name('zwave_node3_humid')
+        else:
+            raise NotImplementedError

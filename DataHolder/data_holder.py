@@ -1,4 +1,5 @@
 from datetime import timedelta
+from typing import List
 from Utils.settings import Settings
 from Application.Models.shift_info import ShiftInfo
 from DataHolder.storage import CircularMemStorage, CircularPersistentStorage, LinearPersistentStorage, DataItem
@@ -14,7 +15,7 @@ class DataHolder:
     """
 
     def __init__(self):
-        self.data_stores: list[DataStore] = self.init_data_stores()
+        self.data_stores: List[DataStore] = self.init_data_stores()
 
     def addMeasurement(self, data_store_name: str, data_item: DataItem):
         self.data_store(data_store_name).data.add_data_item(data_item)
@@ -30,7 +31,7 @@ class DataHolder:
             if data_store.name == data_store_name:
                 return data_store
 
-    def init_data_stores(self) -> list[DataStore]:
+    def init_data_stores(self) -> List[DataStore]:
         data_stores = []
         data_store_ids = Settings().get_data_stores()
         for data_store_id in data_store_ids:
@@ -40,7 +41,6 @@ class DataHolder:
             signals = Settings().get_data_store_signals(data_store_id)
             buf_len = Settings().get_data_store_buflen(data_store_id) if lifespan == LifeSpan.Circular else 0
             db = Settings().get_data_store_db(data_store_id) if persistency == Persistency.Persistent else None
-            print(f"data_store_id = {data_store_id}, signals = {signals}")
             data_store = DataStore(name=name, persistency=persistency, lifespan=lifespan, signals=signals, buf_len=buf_len, db=db)
             if persistency == Persistency.Persistent and lifespan == LifeSpan.Circular:
                 db_interface = DBInterface(name, signals)
@@ -55,5 +55,5 @@ class DataHolder:
             data_stores.append(data_store)
         return data_stores
 
-    def get_data_stores(self) -> list[str]:
+    def get_data_stores(self) -> List[str]:
         return [data_store.name for data_store in self.data_stores]

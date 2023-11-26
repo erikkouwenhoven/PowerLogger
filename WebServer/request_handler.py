@@ -1,6 +1,6 @@
-from typing import Any
+from typing import Dict, Any
 from Application.Models.shift_info import ShiftInfo
-from Utils.system_info import SystemInfo
+from Application.Models.system_info import SystemInfo
 
 
 class RequestHandler:
@@ -26,7 +26,7 @@ class RequestHandler:
     def get_data_stores(self, *args):
         return {"data_stores": self.processor.data_holder.get_data_stores()}
 
-    def get_data_store_info(self, data_store_name: str) -> dict[str, Any]:
+    def get_data_store_info(self, data_store_name: str) -> Dict[str, Any]:
         return self.processor.data_holder.data_store(data_store_name).data_store_info()
 
     def get_shift_info(self, *args):
@@ -37,10 +37,13 @@ class RequestHandler:
         return SystemInfo(self.processor).get_info()
 
     @staticmethod
-    def convert_args(args: str) -> dict[str, str]:
+    def convert_args(args: str) -> Dict[str, str]:
         res = {}
         for item in args.split('&'):
             key_value = item.split('=')
             assert len(key_value) == 2
             res[key_value[0]] = key_value[1]
         return res
+
+    def terminate(self, args):
+        self.processor.p1_interface.stop()

@@ -1,8 +1,9 @@
 from __future__ import annotations
-from typing import Optional, Union
+from typing import List, Dict, Optional, Union
 from datetime import datetime
 from DataHolder.data_types import DataType
 from P1System.data_classes import P1Sample, P1DataType
+from ZWaveSystem.data_classes import SampleZWave, DataTypeZWave
 
 
 class DataItemSpec:
@@ -18,12 +19,12 @@ class DataItemSpec:
         - are associated with a unit
     """
 
-    def __init__(self, types_units: dict[Optional[Union[DataType, str]], str]):
+    def __init__(self, types_units: Dict[Optional[Union[DataType, str]], str]):
         """
         types_units is a dict DataType: unit
         Self.elements is a dict with key the signal type, and value the unit and the index in the data array.
         """
-        self.elements: dict[DataType, tuple[str, int]] = {k: (types_units[k], idx) for idx, k in enumerate(types_units)}
+        self.elements: Dict[DataType, tuple[str, int]] = {k: (types_units[k], idx) for idx, k in enumerate(types_units)}
 
     def add_element(self, data_type: DataType, unit: str):
         n = len(self.elements)
@@ -39,7 +40,7 @@ class DataItemSpec:
     def check_units(self, other):
         for data_type in self.elements:
             unit, idx = self.elements[data_type]
-            # take over the unit from the sample
+            # take over the unit from the data
             if (other_value := other.get_element(data_type)) is not None:
                 other_unit, other_idx = other_value
                 if other_unit:
@@ -48,7 +49,7 @@ class DataItemSpec:
                     else:
                         assert unit == other_unit
 
-    def get_elements(self) -> list[DataType]:
+    def get_elements(self) -> List[DataType]:
         return [data_type for data_type in self.elements]
 
     def get_element(self, data_type: DataType) -> tuple[str, int]:
@@ -63,12 +64,17 @@ class DataItemSpec:
                 return data_type
 
     @classmethod
-    def from_names(cls, names: list[str]):
+    def from_names(cls, names: List[str]):
         return cls({name: None for name in names})
 
     @classmethod
-    def from_p1sample(cls, p1sample: P1Sample, signals: list[str]):
+    def from_p1sample(cls, p1sample: P1Sample, signals: List[str]):
         result = p1sample.get_data_types_units(signals)
+        return cls(result)
+
+    @classmethod
+    def from_zwave_sample(cls, sample: SampleZWave):
+        result = sample.get_data_types_units()
         return cls(result)
 
 
@@ -78,7 +84,7 @@ class DataItem:
     def __init__(self, data_item_spec: DataItemSpec, timestamp: float = None):
         self.data_item_spec: DataItemSpec = data_item_spec
         self.timestamp: Optional[float] = timestamp
-        self.item_data: list[Optional[float]] = [None] * (len(data_item_spec.get_elements()) + 1)
+        self.item_data: List[Optional[float]] = [None] * (len(data_item_spec.get_elements()) + 1)
 
     def get_value(self, element: DataType) -> float:
         unit, idx = self.data_item_spec.get_element(element)
@@ -88,11 +94,11 @@ class DataItem:
         unit, idx = self.data_item_spec.get_element(element)
         return f"{self.item_data[idx + 1]} {unit}"
 
-    def set_value(self, element: str | DataType, value: float):
+    def set_value(self, element: str, value: float):
         unit, idx = self.data_item_spec.get_element(element)
         self.item_data[idx + 1] = value
 
-    def add_value(self, element: DataType, value: float, unit: str):
+    def add_value(self, element: Union[DataType, DataTypeZWave], value: float, unit: str):
         self.data_item_spec.add_element(element, unit)
         unit, idx = self.data_item_spec.get_element(element)
         assert idx == len(self.item_data) - 1
@@ -110,7 +116,7 @@ class DataItem:
             return datetime.fromtimestamp(self.timestamp).strftime("%d-%m-%Y, %H:%M:%S")
 
     @classmethod
-    def from_p1sample(cls, p1sample: P1Sample, signals: list[str]):
+    def from_p1sample(cls, p1sample: P1Sample, signals: List[str]):
         if (value := p1sample.getValue(P1DataType.TIMESTAMP)) is not None:
             data_item = cls(DataItemSpec.from_p1sample(p1sample, signals), timestamp=datetime.timestamp(value.value))
             for element in data_item.data_item_spec.get_elements():
@@ -128,7 +134,15 @@ class DataItem:
             return data_item
 
     @classmethod
-    def from_array(cls, array: list[float], data_item_spec: DataItemSpec):
+    def from_zwave_sample(cls, sample: SampleZWave):
+        data_item = cls(DataItemSpec.from_zwave_sample(sample), timestamp=sample.timestamp)
+        data_types_units = sample.get_data_types_units()
+        for data_type in data_types_units:
+            data_item.set_value(data_type, sample.getValue(data_type))
+        return data_item
+
+    @classmethod
+    def from_array(cls, array: List[float], data_item_spec: DataItemSpec):
         data_item = cls(data_item_spec, timestamp=array[0])
         for i, element in enumerate(data_item_spec.get_elements()):
             unit, idx = data_item_spec.get_element(element)
@@ -136,7 +150,7 @@ class DataItem:
                 data_item.item_data[idx + 1] = value
         return data_item
 
-    def to_array(self, data_item_spec: DataItemSpec) -> list[Optional[float]]:
+    def to_array(self, data_item_spec: DataItemSpec) -> List[Optional[float]]:
         array = [None] * (len(data_item_spec.get_elements()) + 1)
         array[0] = self.timestamp
         for i, element in enumerate(data_item_spec.get_elements()):

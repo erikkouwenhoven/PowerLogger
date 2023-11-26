@@ -209,7 +209,7 @@ class WebConnect:
             else:
                 self.__serial = list(json_data['result'].keys())[0]
                 val = json_data['result'][self.__serial][key['tag']]['1'][0]['val']
-                if val != None:
+                if val is not None:
                     return val
                 else:
                     return 0

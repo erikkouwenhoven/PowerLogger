@@ -44,6 +44,7 @@ def MakeHandlerClass(init_args):
             "/get_data": "get_data",
             "/shift_info": "get_shift_info",
             "/system_info": "get_system_info",
+            "/terminate": "terminate",
         }
 
         def __init__(self, *args, **kwargs):
@@ -66,7 +67,7 @@ def MakeHandlerClass(init_args):
                 self.end_headers()
                 view = getattr(request_handler, self.URL_DATA_VIEWS[parsed.path])
                 result = view(parsed.query)
-#                logging.debug(f"result from do_GET: {result}")
+                logging.debug(f"result from do_GET {parsed.query}: {result}")
                 self.wfile.write(json.dumps(result).encode('utf-8'))
             elif parsed.path in self.URL_BROWSER_VIEWS:
                 logging.debug(f"GET request is in URL_BROWSER_VIEWS")

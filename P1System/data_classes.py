@@ -1,5 +1,5 @@
 from enum import Enum, auto
-from typing import Optional, Union
+from typing import List, Dict, Optional, Union
 from datetime import datetime
 
 
@@ -64,16 +64,19 @@ class P1Value:
         return self.extra_timestamp
 
     @staticmethod
-    def decode_time(value: bytes) -> datetime:
-        return datetime.strptime(value.decode()[:12], "%y%m%d%H%M%S")
+    def decode_time(value: bytes) -> Optional[datetime]:
+        try:
+            return datetime.strptime(value.decode()[:12], "%y%m%d%H%M%S")
+        except ValueError:
+            return None
 
 
 class P1Sample:
     """
         Contains one sample, i.e. a dict of Values
     """
-    def __init__(self, datatypes: list[P1DataType]):
-        self.data: dict[P1DataType, P1Value] = {datatypes[i]: None for i in range(len(datatypes))}
+    def __init__(self, datatypes: List[P1DataType]):
+        self.data: Dict[P1DataType, P1Value] = {datatype: None for datatype in datatypes}
 
     def addValue(self, value: P1Value):
         self.data[value.dataType] = value
@@ -84,7 +87,7 @@ class P1Sample:
     def getValueFromName(self, name: str) -> P1Value:
         return self.data[P1DataType.get_from_name(name)]
 
-    def get_data_types(self) -> list[P1DataType]:
+    def get_data_types(self) -> List[P1DataType]:
         return [key for key in self.data if key != P1DataType.TIMESTAMP]
 
     def get_timestamp(self) -> Optional[datetime]:
@@ -93,7 +96,7 @@ class P1Sample:
         except KeyError:
             return None
 
-    def get_extra_value_signals(self) -> list[P1DataType]:
+    def get_extra_value_signals(self) -> List[P1DataType]:
         res = []
         for key in self.data:
             if value := self.data[key]:
@@ -110,7 +113,7 @@ class P1Sample:
                 raise NotImplementedError
             return extra_signals[0]
 
-    def get_data_types_units(self, signals) -> dict[str, str]:
+    def get_data_types_units(self, signals) -> Dict[str, str]:
         res = {}
         for key in self.data:
             if key.name in signals and key != P1DataType.TIMESTAMP:
@@ -125,8 +128,8 @@ class P1Sample:
             S = f"{len(self.data)} data items\n"
             for item in self.data:
                 if self.data[item]:
-                    unitStr = self.data[item][1].decode() if self.data[item][1] else ""
-                    S += f"{item}: {self.data[item][0]} {unitStr}\n"
+                    unitStr = self.data[item].unit if self.data[item].unit else ""
+                    S += f"{item}: {self.data[item].value} {unitStr}\n"
             return S
         else:
             return ""

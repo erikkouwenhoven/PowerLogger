@@ -1,5 +1,7 @@
+import logging
 import os
-from openzwave.network import ZWaveNetwork
+import datetime
+from openzwave.network import ZWaveNetwork, ZWaveException
 from openzwave.option import ZWaveOption
 from pydispatch import dispatcher
 from Utils.settings import Settings
@@ -10,64 +12,69 @@ class NetworkInterface:
     Basislaag die communiceert met de ZWave library en
     - Instantieert het ZWaveNetwork
     - vangt events af en stuurt door
+    - roept callback aan bij value update of change
     """
-    def __init__(self, valueReceivedCB):
+    def __init__(self, value_received_cb):
         """"
         valueReceivedCB(node, value) functie wordt aangeroepen als waarde binnenkomt
         """
-        self.valueReceivedCB = valueReceivedCB
-        self.network = self.initNetwork()
-        self.networkStatus = []
-        self.connectDispatcher()
-        self.network.start()
+        self.value_received_CB = value_received_cb
+        self.network = self.init_network()
+        if self.network:
+            self.connect_dispatcher()
+            self.network.start()
 
-    def initNetwork(self):
+    def init_network(self):
         # Define some manager options
-        options = ZWaveOption(Settings().get_device(), config_path=Settings().get_config(), user_path=".", cmd_line="")
-        # options.set_log_file(Settings().config["OpenZWaveSettings"]["Logging"]["Filename"])
-        options.set_append_log_file(False)
-        options.set_console_output(False)
-        options.set_save_log_level(log)
-        options.set_logging(True)
-        options.lock()
-# Create a network object
-        network = ZWaveNetwork(options, autostart=False)
-        return network
+        try:
+            options = ZWaveOption(Settings().get_device(), config_path=Settings().get_config(), user_path=".", cmd_line="")
+            # options.set_log_file(Settings().config["OpenZWaveSettings"]["Logging"]["Filename"])
+            options.set_append_log_file(False)
+            options.set_console_output(False)
+            options.set_save_log_level("Debug")
+            options.set_logging(True)
+            options.set_save_configuration(True)
+            options.lock()
+            network = ZWaveNetwork(options, autostart=False)
+            return network
+        except ZWaveException as err:
+            logging.debug(f"ZWaveException: {err}")
 
-    def connectDispatcher(self):
-        # We connect to the louie dispatcher
-        dispatcher.connect(self.louie_network_started, ZWaveNetwork.SIGNAL_NETWORK_STARTED)
-        dispatcher.connect(self.louie_network_failed, ZWaveNetwork.SIGNAL_NETWORK_FAILED)
-        dispatcher.connect(self.louie_network_ready, ZWaveNetwork.SIGNAL_NETWORK_READY)
-        dispatcher.connect(self.louie_network_awake, ZWaveNetwork.SIGNAL_NETWORK_AWAKED)
-        dispatcher.connect(self.louie_value_update, ZWaveNetwork.SIGNAL_VALUE)
-        dispatcher.connect(self.louie_value_changed, ZWaveNetwork.SIGNAL_VALUE_CHANGED)
+    def connect_dispatcher(self):
+        dispatcher.connect(self.network_started, ZWaveNetwork.SIGNAL_NETWORK_STARTED)
+        dispatcher.connect(self.network_failed, ZWaveNetwork.SIGNAL_NETWORK_FAILED)
+        dispatcher.connect(self.network_ready, ZWaveNetwork.SIGNAL_NETWORK_READY)
+        dispatcher.connect(self.network_awake, ZWaveNetwork.SIGNAL_NETWORK_AWAKED)
 
-    def louie_network_started(self, network):
-        print("***** Network has started")
-        self.networkStatus.append("Started")
+    def network_started(self, network):
+        logging.info("***** Network has started")
 
-    def louie_network_failed(self, network):
-        print("***** Network has failed")
-        self.networkStatus.append("Failed")
+    def network_failed(self, network):
+        logging.info("***** Network has failed")
 
-    def louie_network_ready(self, network):
-        print("***** Network is ready")
-        self.networkStatus.append("Ready")
+    def network_ready(self, network):
+        logging.info("***** Network is ready")
 
-    def louie_network_awake(self, network):
-        print("***** Network is awake")
-        self.networkStatus.append("Awake")
+    def network_awake(self, network):
+        logging.info("***** Network is awake")
+        dispatcher.connect(self.value_update, ZWaveNetwork.SIGNAL_VALUE)
+        dispatcher.connect(self.value_changed, ZWaveNetwork.SIGNAL_VALUE_CHANGED)
+        dispatcher.connect(self.node_event, ZWaveNetwork.SIGNAL_NODE_EVENT)
 
-    def louie_value_update(self, network, node, value):
-        print("Hello from value : {}.".format(value))
+    def value_update(self, network, node, value):
+        logging.info("Hello from value : {}.".format(value))
+        self.show_result(node, value)
+        self.value_received_CB(node, value)
 
-    def louie_value_changed(self, network, node, value):
-        print("Hello from value CHANGE : {}.".format(value))
-        self.valueReceivedCB(node, value)
+    def value_changed(self, network, node, value):
+        logging.info("Hello from value CHANGE : {}.".format(value))
+        self.show_result(node, value)
+        self.value_received_CB(node, value)
 
-    def isNodeCommunicating(self, nodeID):
-        if self.network.nodes[nodeID].is_sleeping is False and self.network.nodes[nodeID].is_ready is True:
-            return True
-        else:
-            return False
+    def node_event(self, **kwargs):
+        print("Hello from node event : {}.".format( kwargs ))
+
+    def show_result(self, node, value):
+        S = f'{datetime.datetime.now()}: {node.node_id} {value.label} ({value.value_id}) {value.data} {value.units}'
+        with open('output.txt', 'at') as file:
+            file.write(S + '\n')
