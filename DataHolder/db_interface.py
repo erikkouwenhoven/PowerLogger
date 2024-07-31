@@ -50,7 +50,7 @@ class DBInterface:
 
     def get_table_names(self) -> List[str]:
         cur = self.con.cursor()
-        cur.execute("SELECT name from sqlite_schema WHERE type='table'")
+        cur.execute("SELECT name from sqlite_master WHERE type='table'")
         res = cur.fetchall()
         logging.debug(f"table names: {res}")
         return [item[0] for item in res]

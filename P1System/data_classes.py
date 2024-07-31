@@ -1,6 +1,7 @@
 from enum import Enum, auto
 from typing import List, Dict, Optional, Union
 from datetime import datetime
+from DataHolder.data_item import DataItemSpec, DataItem
 
 
 class P1DataType(Enum):
@@ -41,7 +42,7 @@ class P1Value:
     """
     def __init__(self, datatype: P1DataType):
         self.dataType = datatype
-        self.value: Optional[float | datetime] = None
+        self.value: Optional[Union[float, datetime]] = None
         self.unit: Optional[bytes] = None
         self.extra_timestamp: Optional[datetime] = None
 
@@ -122,6 +123,26 @@ class P1Sample:
                 else:
                     res[key.name] = None
         return res
+
+    def to_data_item_spec(self, signals: List[str]) -> DataItemSpec:
+        result = self.get_data_types_units(signals)
+        return DataItemSpec(result)
+
+    def to_data_item(self, signals: List[str]) -> DataItem:
+        if (value := self.getValue(P1DataType.TIMESTAMP)) is not None:
+            data_item = DataItem(self.to_data_item_spec(signals), timestamp=datetime.timestamp(value.value))
+            for element in data_item.data_item_spec.get_elements():
+                unit, idx = data_item.data_item_spec.get_element(element)
+                if (value := self.getValueFromName(element)) is not None:
+                    data_item.item_data[idx + 1] = value.value
+            return data_item
+
+    def extra_signal_to_data_item(self, extra_signal: str):
+        if extra_value := self.getValueFromName(extra_signal):
+            data_item = DataItem(self.to_data_item_spec([extra_signal]),
+                                 timestamp=datetime.timestamp(extra_value.get_extra_timestamp()))
+            data_item.set_value(str(extra_signal), self.getValueFromName(extra_signal).value)
+            return data_item
 
     def __str__(self):
         if len(self.data) > 0:

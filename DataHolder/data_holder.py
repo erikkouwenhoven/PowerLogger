@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import List
 from Utils.settings import Settings
 from Application.Models.shift_info import ShiftInfo
@@ -17,7 +17,13 @@ class DataHolder:
     def __init__(self):
         self.data_stores: List[DataStore] = self.init_data_stores()
 
-    def addMeasurement(self, data_store_name: str, data_item: DataItem):
+    def addMeasurement(self, data_store_name: str, data_item: DataItem, no_zeros: bool = False, min_time_spacing=None):
+        if no_zeros is True and data_item.is_zero() is True:
+            return
+        if (min_time_spacing is not None and
+                (datetime.fromtimestamp(data_item.timestamp) - datetime.fromtimestamp(
+                    self.data_store(data_store_name).data.last_time())).total_seconds() < min_time_spacing):
+            return
         self.data_store(data_store_name).data.add_data_item(data_item)
 
     def get_average(self, data_store_name: str, from_time, to_time, selected_signals, shift_info: ShiftInfo):
@@ -41,7 +47,8 @@ class DataHolder:
             signals = Settings().get_data_store_signals(data_store_id)
             buf_len = Settings().get_data_store_buflen(data_store_id) if lifespan == LifeSpan.Circular else 0
             db = Settings().get_data_store_db(data_store_id) if persistency == Persistency.Persistent else None
-            data_store = DataStore(name=name, persistency=persistency, lifespan=lifespan, signals=signals, buf_len=buf_len, db=db)
+            data_store = DataStore(name=name, persistency=persistency, lifespan=lifespan, signals=signals,
+                                   buf_len=buf_len, db=db)
             if persistency == Persistency.Persistent and lifespan == LifeSpan.Circular:
                 db_interface = DBInterface(name, signals)
                 data_store.data = CircularPersistentStorage(buf_len, signals, db_interface, table=name)

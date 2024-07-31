@@ -33,6 +33,10 @@ class Storage(metaclass=ABCMeta):
         pass
 
     @abstractmethod
+    def add_data_item(self, data_item: DataItem):
+        pass
+
+    @abstractmethod
     def append(self, data_item: DataItem):
         pass
 
@@ -288,15 +292,7 @@ class PersistentStorage(Storage, metaclass=ABCMeta):
         return DataItem.from_array(res, self.data_item_spec)
 
     def append(self, data_item: DataItem):
-        logging.debug(f"PersistentStorage.append {data_item}")
         array = data_item.to_array(self.data_item_spec)
-        logging.debug(f"PersistentStorage.append array = {array}")
-        logging.debug(f"PersistentStorage.append self.data_item_spec = {self.data_item_spec.get_elements()}")
-
-        for i, element in enumerate(self.data_item_spec.get_elements()):
-            unit, idx = self.data_item_spec.get_element(element)
-            logging.debug(f"PersistentStorage.append element = {element}, unit = {unit}, idx = {idx}")
-
         self.db_interface.append_data_item(self.table, self.data_item_spec, array)
 
     def insert(self, data_item: DataItem, idx: int):

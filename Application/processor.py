@@ -23,14 +23,14 @@ class Processor:
 
     def p1SampleAcquired(self):
         p1_sample = self.p1_interface.getSample()
-        if data_item := DataItem.from_p1sample(p1_sample, Settings().get_data_store_signals(Settings().get_P1_data_store())):
+        if data_item := p1_sample.to_data_item(Settings().get_data_store_signals(Settings().get_P1_data_store())):
             if self.sma_interface:
                 data_item.add_value(SMADataType.SOLAR.name, self.sma_interface.getCurrentPower(), SMAInterface.c_POWER_UNIT)
             self.data_holder.addMeasurement(Settings().get_P1_data_store(), data_item)
         self.filter_and_differentiate(p1_sample)
 
     def filter_and_differentiate(self, p1_sample: P1Sample):
-        if data_item := DataItem.from_p1sample_extra_timestamp(p1_sample, Settings().get_differential_source_signal()):
+        if data_item := p1_sample.extra_signal_to_data_item(Settings().get_differential_source_signal()):
             data_store = self.data_holder.data_store(Settings().get_filtered_data_store())
             if data_store.data.last_time() != data_item.get_timestamp():
                 data_store.data.append(data_item)
@@ -66,9 +66,9 @@ class Processor:
     def zwaveSampleAcquired(self):
         sample = self.zwave_interface.getSample()
         logging.debug(f"zwaveSampleAcquired: {sample}")
-        if data_item := DataItem.from_zwave_sample(sample):
-            logging.debug(f"zwaveSampleAcquired data_item: {data_item}")
-            self.data_holder.addMeasurement(Settings().get_ZWave_data_store(sample.node_id, sample.get_data_types()), data_item)
+        if data_item := sample.to_data_item(sample.get_data_types()):
+            data_store = Settings().get_ZWave_data_store(sample.node_id, sample.get_data_types())
+            self.data_holder.addMeasurement(data_store, data_item, no_zeros=True, min_time_spacing=Settings().get_min_storage_time_diff_seconds())
 
     def get_P1_start_time(self) -> datetime:
         return self.p1_interface.interpreter.start_time

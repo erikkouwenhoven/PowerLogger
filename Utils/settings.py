@@ -6,7 +6,6 @@ from typing import List, Dict
 from DataHolder.buffer_attrs import Persistency, LifeSpan
 from DataHolder.data_types import DataType
 from P1System.data_classes import P1DataType
-from ZWaveSystem.data_classes import DataTypeZWave
 
 
 class Settings:
@@ -70,6 +69,9 @@ class Settings:
 
     def get_data_store_db(self, data_store_id) -> str:
         return self.config.get('DATASTORAGE', data_store_id + '_db')
+
+    def get_min_storage_time_diff_seconds(self) -> int:
+        return int(self.config.get('DATASTORAGE', 'min_storage_time_diff_seconds'))
 
     def scheduled_jobs(self): # -> List[str]:
         return self.config.get('SCHEDULER', 'scheduled_jobs').split()
@@ -142,25 +144,25 @@ class Settings:
         else:
             return self.config.get('ZWAVE', 'device_linux')
 
-    def get_zwave_subscriptions(self) -> Dict[int, List[int]]:
+    def get_zwave_subscriptions(self) -> Dict[int, List[str]]:
         res = {}
         for subscr in self.config.get('ZWAVE', 'subscriptions').split('\n'):
             split_res = subscr.split(':')
             node = int(split_res[0])
-            val_ids = [int(val) for val in split_res[1].split(',')]
+            val_ids = [val for val in split_res[1].split(',')]
             res[node] = val_ids
         return res
 
-    def get_ZWave_data_store(self, node: int, data_types: List[DataTypeZWave]) -> str:
+    def get_ZWave_data_store(self, node: int, data_types: List[str]) -> str:
         assert len(data_types) == 1  # Implemented for single data type
         data_type = data_types[0]
-        if node == 2 and data_type == DataTypeZWave.TEMPERATURE:
+        if node == 2 and data_type == 'TEMPERATURE':
             return self.get_data_store_name('zwave_node2_temperature')
-        elif node == 2 and data_type == DataTypeZWave.RELATIVE_HUMIDITY:
+        elif node == 2 and data_type == 'RELATIVE_HUMIDITY':
             return self.get_data_store_name('zwave_node2_humid')
-        elif node == 3 and data_type == DataTypeZWave.TEMPERATURE:
+        elif node == 3 and data_type == 'TEMPERATURE':
             return self.get_data_store_name('zwave_node3_temperature')
-        elif node == 3 and data_type == DataTypeZWave.RELATIVE_HUMIDITY:
+        elif node == 3 and data_type == 'RELATIVE_HUMIDITY':
             return self.get_data_store_name('zwave_node3_humid')
         else:
             raise NotImplementedError
