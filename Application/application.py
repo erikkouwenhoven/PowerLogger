@@ -1,4 +1,8 @@
 from Utils.settings import Settings
+from Application.plugin import Publisher
+from Application.Plugins.p1_plugin import P1Plugin
+from Application.Plugins.sma_plugin import SMAPlugin
+from Application.Plugins.zwave_plugin import ZWavePlugin
 from Application.processor import Processor
 from P1System.p1_interface import P1Interface
 from SMASystem.sma_interface import SMAInterface
@@ -8,12 +12,11 @@ from WebServer.threaded_server import ThreadedServer
 from Scheduler.scheduler import Scheduler
 
 
-class Controller:
+class Application(Publisher):
     """
-    There is only one controller, it is at the top of the hierarchy.
+    The main application, it is at the top of the hierarchy. Inherits from Publisher.
     It manages the following subsystems:
-    - master measuring system running continuously once started
-    - slave measuring system following the master's timing (controlled by the processor)
+    - the plugins; these hold their in-memory data
     - data holder holds collection of storages for time signals, volatile or persistent, circular or linear
     - web server receiving incoming requests
     - scheduler for management of scheduled activities
@@ -21,6 +24,11 @@ class Controller:
     """
 
     def __init__(self):
+        super().__init__()
+        P1Plugin(self)
+        SMAPlugin(self)
+        ZWavePlugin(self)
+
         self.p1_interface = P1Interface(Settings().get_measurement_p1_signals())
         self.sma_interface = SMAInterface()
         self.zwave_interface = ZWaveInterface()

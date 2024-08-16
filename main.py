@@ -2,7 +2,7 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler
 from Utils.settings import Settings
-from Application.controller import Controller
+from Application.application import Application
 
 
 def initializeLogging(pathToFile):
@@ -10,7 +10,7 @@ def initializeLogging(pathToFile):
         pathToFile = '.'
     if not os.path.exists(pathToFile):
         os.makedirs(pathToFile)
-        print('Directory {} aangemaakt'.format(pathToFile))  # Qt is nog niet in de lucht, dus geen QMessageBox
+        print('Directory {} aangemaakt'.format(pathToFile))
     filename = Settings().logging_filename()
     filepath = os.path.join(pathToFile, filename)
     logging.getLogger().setLevel(logging.DEBUG)
@@ -31,4 +31,4 @@ def initializeLogging(pathToFile):
 
 if __name__ == "__main__":
     initializeLogging(Settings().logging_path())
-    Controller()
+    Application()

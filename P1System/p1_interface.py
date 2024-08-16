@@ -44,18 +44,16 @@ class P1Interface:
             getSample():            returns latest sample
     """
 
-    def __init__(self, p1_value_types: List[P1DataType]):
+    def __init__(self, p1_value_types: List[P1DataType], post_sample_CB):
         self.reqValues = P1DataType.all_poss() if p1_value_types is None else p1_value_types
+        self.post_sample_CB = post_sample_CB
         self.interpreter = Interpreter(SerialSettings())
         self.sample: Optional[P1Sample] = None
         self.interval = None
-        self.post_sample_CB = None
 
-    def start(self, interval=None, post_sample_CB=None):
+    def start(self, interval=None):
         self.interval = interval
         self.interpreter.sync_sample()
-        if post_sample_CB:
-            self.post_sample_CB = post_sample_CB
         self.interpreter.runContinuously(self.reqValues, self._sampleComplete)
 
     def singleShot(self):

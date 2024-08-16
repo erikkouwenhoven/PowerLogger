@@ -7,17 +7,16 @@ from typing import Dict, List, Optional
 
 class ZWaveInterface:
 
-    def __init__(self):
-        self.post_sample_CB = None
-        self.network_interface = NetworkInterface(self.value_received_CB)
+    def __init__(self, post_sample_cb):
+        self.post_sample_CB = post_sample_cb
+        self.network_interface = NetworkInterface(self._value_received_CB)
         self.sample: Optional[SampleZWave] = None
         self.subscriptions: Optional[Dict[int, List[str]]] = None  # registered node-valueIDs that are called back
 
-    def register(self, subscriptions: Optional[Dict[int, List[str]]], post_sample_CB=None):
-        self.post_sample_CB = post_sample_CB
+    def register(self, subscriptions: Optional[Dict[int, List[str]]]):
         self.subscriptions = subscriptions
 
-    def value_received_CB(self, zWaveNode, zWaveValue):
+    def _value_received_CB(self, zWaveNode, zWaveValue):
         logging.info(f'valueReceived callback from network: node={zWaveNode.node_id}, parent_id {zWaveValue.parent_id}, value={zWaveValue.data} {zWaveValue.units} ({zWaveValue.label}, {zWaveValue.value_id})')
         if self.post_sample_CB:
             if zWaveNode.node_id in self.subscriptions:
