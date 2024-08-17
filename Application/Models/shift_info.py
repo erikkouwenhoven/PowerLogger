@@ -7,7 +7,7 @@ class ShiftInfo:
     """
 
     def __init__(self):
-        self.shift_in_seconds: float = Settings().get_shift_in_seconds()
+        self.shift_in_seconds: float = Settings().get_shift_in_seconds()  # TODO moet dynamisch worden
         self.signal_to_shift: str = Settings().get_signal_to_shift()
         self.sampling_time = None
 

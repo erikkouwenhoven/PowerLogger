@@ -73,7 +73,7 @@ class P1Interface:
     def _sampleComplete(self, sample: P1Sample) -> None:
         self.sample = sample
         if self.post_sample_CB:
-            self.post_sample_CB()
+            self.post_sample_CB(sample)
 
     def get_sampling_period(self):
         return self.interpreter.get_sampling_period()

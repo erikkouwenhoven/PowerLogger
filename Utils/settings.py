@@ -50,6 +50,9 @@ class Settings:
     def get_P1_data_store(self):
         return self.config.get('DATASTORAGE', 'p1_data_store')
 
+    def get_SMA_data_store(self):
+        return self.config.get('DATASTORAGE', 'sma_data_store')
+
     def get_data_store_name(self, data_store_id) -> str:
         return self.config.get('DATASTORAGE', data_store_id + '_name')
 

@@ -22,7 +22,7 @@ class ZWaveInterface:
             if zWaveNode.node_id in self.subscriptions:
                 if zWaveValue.label in self.subscriptions[zWaveNode.node_id]:
                     self.sample = SampleZWave.from_zwave_data(zWaveNode, zWaveValue)
-                    self.post_sample_CB()
+                    self.post_sample_CB(self.sample)
                 else:
                     logging.debug(f'Niet geregistreerd: value {zWaveValue.label} zit niet in {self.subscriptions[zWaveNode.node_id]}')
             else:

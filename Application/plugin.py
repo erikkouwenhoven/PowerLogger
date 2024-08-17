@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 
 
 class Plugin(ABC):
@@ -48,6 +48,11 @@ class Publisher:
         for subscriber in self.subscriptions:
             if event_key in self.subscriptions[subscriber]:
                 subscriber.update(event_key, data)
+
+    def get_plugin(self, plugin_name: str) -> Plugin:
+        for plugin in self.subscriptions:
+            if plugin.plugin_name == plugin_name:
+                return plugin
 
     def get_listeners(self, event_key: str) -> List[Plugin]:
         return [subscriber for subscriber, subscribed_events in self.subscriptions.items() if
