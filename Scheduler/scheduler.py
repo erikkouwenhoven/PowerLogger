@@ -16,29 +16,38 @@ class Scheduler:
         self.initialize(self.scheduler)
 
     def initialize(self, scheduler: BackgroundScheduler):
-        job_ids = Settings().scheduled_jobs()
-        for job_id in job_ids:
-            sched_job = ScheduledJob(job_id)
-            scheduler.add_job(self.exec_job, 'interval', minutes=sched_job.interval_minutes,
-                              kwargs={'id': job_id, 'source': sched_job.source, 'dest': sched_job.destination},
-                              start_date=datetime.now() + timedelta(minutes=sched_job.start_delay_minutes), id=job_id)
+        job_names = Settings().scheduled_jobs()
+        for job_name in job_names:
+            sched_job = ScheduledJob(job_name)
+            kwargs = {'sources': sched_job.sources,
+                      'dest': sched_job.destination,
+                      'operation': sched_job.operation,
+                      'operand': sched_job.operand
+                      }
+            scheduler.add_job(self.exec_job,
+                              'interval',
+                              minutes=sched_job.interval_minutes,
+                              kwargs=kwargs,
+                              start_date=datetime.now() + timedelta(minutes=sched_job.start_delay_minutes),
+                              job_id=job_name)
         scheduler.start()
 
     def exec_job(self, **kwargs):
         job_id = kwargs['id']
         job = self.scheduler.get_job(job_id=job_id)
         interval = job.trigger.interval
-        if job_id == "persist":
-            self.processor.transfer_derived_value(source=kwargs['source'], dest=kwargs['dest'], interval=interval)
-        else:
-            raise NotImplementedError
+        self.processor.process_derived_signal(sources=kwargs['sources'],
+                                              dest=kwargs['dest'],
+                                              operation=kwargs['operation'],
+                                              operand=kwargs['operand'])
 
 
 class ScheduledJob:
 
-    def __init__(self, job_id):
-        self.job_id = job_id
-        self.interval_minutes = Settings().interval_minutes(job_id)
-        self.start_delay_minutes = Settings().start_delay_minutes(job_id)
-        self.source = Settings().source(job_id)
-        self.destination = Settings().destination(job_id)
+    def __init__(self, job_name: str):
+        self.job_name = job_name
+        self.sources = Settings().sched_job_sources(job_name)
+        self.destination = Settings().sched_job_destination(job_name)
+        self.interval_minutes = Settings().interval_minutes(job_name)
+        self.start_delay_minutes = Settings().start_delay_minutes(job_name)
+        self.operation, self.operand = Settings().sched_job_operation(job_name)

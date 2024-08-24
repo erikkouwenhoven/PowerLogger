@@ -46,6 +46,7 @@ class DataHolder:
             lifespan = Settings().get_data_store_lifespan(data_store_id)
             signals = Settings().get_data_store_signals(data_store_id)
             buf_len = Settings().get_data_store_buflen(data_store_id) if lifespan == LifeSpan.Circular else 0
+            sampling_period = Settings().get_data_store_sampling_period(data_store_id)
             db = Settings().get_data_store_db(data_store_id) if persistency == Persistency.Persistent else None
             data_store = DataStore(name=name, persistency=persistency, lifespan=lifespan, signals=signals,
                                    buf_len=buf_len, db=db)

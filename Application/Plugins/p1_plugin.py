@@ -23,25 +23,7 @@ class P1Plugin(Plugin):
     def post_sample_CB(self, p1_sample: P1Sample):
         if p1_data_item := p1_sample.to_data_item(Settings().get_data_store_signals(Settings().get_P1_data_store())):
             self.data_holder.addMeasurement(Settings().get_P1_data_store(), p1_data_item)
-        self.filter_and_differentiate(p1_sample)
         self.publisher.publish(self.outgoing_event, None)
-
-    def filter_and_differentiate(self, p1_sample: P1Sample):
-        if data_item := p1_sample.extra_signal_to_data_item(Settings().get_differential_source_signal()):
-            data_store = self.data_holder.data_store(Settings().get_filtered_data_store())
-            if data_store.data.last_time() != data_item.get_timestamp():
-                data_store.data.append(data_item)
-                self.data_holder.addMeasurement(Settings().get_filtered_data_store(), data_item)
-                if prev_item := data_store.data.get_data_item(data_store.data.last_index(offset=1)):
-                    delta = (data_item.get_value(Settings().get_differential_source_signal()) -
-                             prev_item.get_value(Settings().get_differential_source_signal()))
-                    data_item_spec = self.data_holder.data_store(
-                        Settings().get_differential_dest_data_store()).data.data_item_spec
-                    data_item_spec.set_unit(Settings().get_differential_dest_signal(),
-                                            Settings().get_differential_dest_unit())
-                    delta_data_item = DataItem(data_item_spec, timestamp=prev_item.get_timestamp())
-                    delta_data_item.set_value(Settings().get_differential_dest_signal(), delta)
-                    self.data_holder.addMeasurement(Settings().get_differential_dest_data_store(), delta_data_item)
 
     def start(self):
         self.p1_interface.start()

@@ -1,11 +1,11 @@
 import os
 import configparser
-import serial
 from datetime import datetime
 from typing import List, Dict
 from DataHolder.buffer_attrs import Persistency, LifeSpan
 from DataHolder.data_types import DataType
 from P1System.data_classes import P1DataType
+from Application.Models.operation import Operation
 
 
 class Settings:
@@ -64,6 +64,9 @@ class Settings:
         return LifeSpan.Circular if self.config.get('DATASTORAGE', data_store_id + '_lifespan') == "circular" \
             else LifeSpan.Linear
 
+    def get_data_store_sampling_period(self, data_store_id, fallback=None) -> int | None:
+        return int(self.config.get('DATASTORAGE', data_store_id + '_sampling_period'))
+
     def get_data_store_signals(self, data_store_id): # -> List[str]:
         return self.config.get('DATASTORAGE', data_store_id + '_signals').split()
 
@@ -96,25 +99,29 @@ class Settings:
         else:
             return int(parameter)
 
-    def source(self, job_id) -> str:
-        return self.config.get('SCHEDULER', job_id + '_source')
+    def sched_job_sources(self, job_id) -> list[str]:
+        return self.config.get('SCHEDULER', job_id + '_sources').split()
 
-    def destination(self, job_id) -> str:
+    def sched_job_destination(self, job_id) -> str:
         return self.config.get('SCHEDULER', job_id + '_destination')
 
-    def data_dir_name(self):
+    def sched_job_operation(self, job_id) -> tuple[Operation, str]:
+        res = self.config.get('SCHEDULER', job_id + '_operation').split()
+        return Operation(res[0]), res[1]
+
+    def data_dir_name(self) -> str:
         return self.config.get('PATHS', 'data')
 
-    def db_filename(self):
+    def db_filename(self) -> str:
         return self.config.get('PATHS', 'db_file')
 
-    def logging_path(self):
+    def logging_path(self) -> str:
         return self.config.get('PATHS', 'logging')
 
-    def logging_filename(self):
+    def logging_filename(self) -> str:
         return self.config.get('PATHS', 'logfile')
 
-    def get_shift_in_seconds(self):
+    def get_shift_in_seconds(self) -> float:
         return float(self.config.get('PROCESSING', 'shift_in_seconds'))
 
     def get_signal_to_shift(self) -> str:

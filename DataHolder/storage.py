@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 import logging
-from abc import ABCMeta, abstractmethod
+from abc import ABC, ABCMeta, abstractmethod
 import math
 from typing import List, Dict, Optional
 from Application.Models.shift_info import ShiftInfo
@@ -9,7 +9,7 @@ from DataHolder.data_types import DataType
 from DataHolder.data_item import DataItem, DataItemSpec
 
 
-class Storage(metaclass=ABCMeta):
+class Storage(metaclass=ABC):
     """
     Abstract Base Class for a buffer holding timed data. Data elements are stored in class DataItem.
     """
@@ -73,37 +73,6 @@ class Storage(metaclass=ABCMeta):
             result[signal] = [self.get_data_item(idx).get_value(signal) for idx in self.timedIndexes()]
         result["units"] = {str(data_type): self.data_item_spec.get_unit(data_type) for data_type in self.data_item_spec.get_elements()}
         return result
-
-    def average(self, from_time: datetime, to_time: datetime, selected_signals: List[DataType], shift_info: ShiftInfo) -> DataItem:
-        data_item_spec = DataItemSpec({signal: self.data_item_spec.get_unit(signal) for signal in selected_signals})
-        sample = DataItem(data_item_spec, timestamp=0.5*(datetime.timestamp(from_time) + datetime.timestamp(to_time)))
-        logging.debug(f"average: from = {from_time}, to = {to_time}, avg time = {datetime.fromtimestamp(sample.get_timestamp())}")
-        indexes = [idx for idx in self.timedIndexes(self.index_from_time(from_time), self.index_from_time(to_time))]
-        int_part = int(math.floor(shift_info.shift_in_samples()))
-        float_part = shift_info.shift_in_samples() - int_part
-        for signal in selected_signals:
-            assert signal in self.data_item_spec.get_elements()
-            cumsum = 0.0
-            cum_count = 0
-            for idx in indexes:
-                if signal == shift_info.signal_to_shift:
-                    if 0 < idx + int_part < self.length() - 1 - 1:
-                        try:
-                            cumsum += (1 - float_part) * self.get_data_item(idx + int_part).get_value(signal) +\
-                                      float_part * self.get_data_item(idx + int_part + 1).get_value(signal)
-                            cum_count += 1
-                        except TypeError:  # catch a None-type
-                            pass
-                else:
-                    if (value := self.get_data_item(idx).get_value(signal)) is not None:
-                        cumsum += value
-                        cum_count += 1
-            try:
-                sample.set_value(signal, cumsum/cum_count)
-            except ZeroDivisionError:
-                sample.set_value(signal, 0.0)
-        logging.debug(f"averaging count: {len(indexes)}")
-        return sample
 
     def dump(self) -> List[str]:
         result = [f"Dump of circular buffer",

@@ -17,8 +17,8 @@ class ThreadedServer:
         # Start the server in a new thread
         daemon = threading.Thread(name='daemon_server',
                                   target=self.start_server,
-                                  args=(self.request_handler, Settings().webServerPort()))
-        daemon.setDaemon(True)  # Set as a daemon so it will be killed once the main thread is dead.
+                                  args=(self.request_handler, Settings().webServerPort()),
+                                  daemon=True)  # Set as a daemon so it will be killed once the main thread is dead.
         daemon.start()
 
     @staticmethod
