@@ -43,9 +43,9 @@ class P1Interface:
             getSample():            returns latest sample
     """
 
-    def __init__(self, p1_value_types: list[P1DataType], post_sample_CB):
-        self.reqValues = P1DataType.all_poss() if p1_value_types is None else p1_value_types
-        self.post_sample_CB = post_sample_CB
+    def __init__(self, p1_value_types: list[P1DataType], post_sample_cb):
+        self.reqValues: list[P1DataType] = P1DataType.all_poss() if p1_value_types is None else p1_value_types
+        self.post_sample_cb = post_sample_cb
         self.interpreter = Interpreter(SerialSettings())
         self.sample: P1Sample | None = None
         self.interval = None
@@ -53,9 +53,9 @@ class P1Interface:
     def start(self, interval=None):
         self.interval = interval
         self.interpreter.sync_sample()
-        self.interpreter.runContinuously(self.reqValues, self._sampleComplete)
+        self.interpreter.run_continuously(self.reqValues, self._sample_complete)
 
-    def singleShot(self):
+    def single_shot(self):
         self.interpreter.sync_sample()
         sample = self.interpreter.get_sample(self.reqValues)
         return sample
@@ -63,16 +63,16 @@ class P1Interface:
     def stop(self):
         self.interpreter.stop_running()
 
-    def getSample(self):
+    def get_sample(self):
         return self.sample
 
     def get_raw_lines(self):
         return self.interpreter.get_raw_lines()
 
-    def _sampleComplete(self, sample: P1Sample) -> None:
+    def _sample_complete(self, sample: P1Sample) -> None:
         self.sample = sample
-        if self.post_sample_CB:
-            self.post_sample_CB(sample)
+        if self.post_sample_cb:
+            self.post_sample_cb(sample)
 
     def get_sampling_period(self):
         return self.interpreter.get_sampling_period()

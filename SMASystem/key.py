@@ -1,12 +1,10 @@
 class Key:
-	# status: 
+	# status:
 	#	1725 -> offline
 	#	307  -> online
-
-	
 	power_current = {'tag': '6100_40263F00', 'unit': 'W'}
 	power_total = {'tag': '6400_00260100', 'unit': 'W'}
-	
+
 	server_ip = {'tag': '6180_104A9A00'}
 	server_dns = {'tag': '6180_104A9D00'}
 	server_netmask = {'tag': '6180_104A9B00'}

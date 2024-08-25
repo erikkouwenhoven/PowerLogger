@@ -1,5 +1,4 @@
 import logging
-import os
 import datetime
 from openzwave.network import ZWaveNetwork, ZWaveException
 from openzwave.option import ZWaveOption
@@ -24,7 +23,8 @@ class NetworkInterface:
             self.connect_dispatcher()
             self.network.start()
 
-    def init_network(self):
+    @staticmethod
+    def init_network() -> ZWaveNetwork:
         # Define some manager options
         try:
             options = ZWaveOption(Settings().get_device(), config_path=Settings().get_config(), user_path=".", cmd_line="")
@@ -69,10 +69,10 @@ class NetworkInterface:
     def value_changed(self, network, node, value):
         logging.info("Hello from value CHANGE : {}.".format(value))
         self.show_result(node, value)
-        self.value_received_CB(node, value)
+        self.value_received_CB(node.node_id, value.label, value.data, value.units)
 
     def node_event(self, **kwargs):
-        print("Hello from node event : {}.".format( kwargs ))
+        print("Hello from node event : {}.".format(kwargs))
 
     def show_result(self, node, value):
         S = f'{datetime.datetime.now()}: {node.node_id} {value.label} ({value.value_id}) {value.data} {value.units}'

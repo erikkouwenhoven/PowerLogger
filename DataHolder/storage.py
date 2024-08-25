@@ -1,19 +1,15 @@
 from datetime import datetime, timedelta
 import logging
 from abc import ABC, ABCMeta, abstractmethod
-import math
-from typing import List, Dict, Optional
-from Application.Models.shift_info import ShiftInfo
 from DataHolder.db_interface import DBInterface
-from DataHolder.data_types import DataType
 from DataHolder.data_item import DataItem, DataItemSpec
 
 
-class Storage(metaclass=ABC):
+class Storage(ABC):
     """
     Abstract Base Class for a buffer holding timed data. Data elements are stored in class DataItem.
     """
-    def __init__(self, elems: List[str]):
+    def __init__(self, elems: list[str]):
         self.data_item_spec = DataItemSpec({elem: None for elem in elems})
 
     @abstractmethod
@@ -52,20 +48,20 @@ class Storage(metaclass=ABC):
     def index_from_time(self, time: datetime) -> int:
         pass
 
-    def last_time(self) -> Optional[float]:
+    def last_time(self) -> float | None:
         try:
             return self.get_data_item(self.last_index()).get_timestamp()
         except (IndexError, AttributeError, TypeError):
             return None
 
-    def timestamp_range(self) -> Optional[List[float]]:
+    def timestamp_range(self) -> list[float] | None:
         try:
             return [self.get_data_item(self.min_time_index()).get_timestamp(),
                     self.get_data_item(self.last_index()).get_timestamp()]
         except AttributeError:
             return None
 
-    def serialize(self, signals: List[DataType] = None) -> Dict:
+    def serialize(self, signals: list[str] = None) -> dict:
         result = {"timestamp": [self.get_data_item(idx).get_timestamp() for idx in self.timedIndexes()]}
         if signals is None:
             signals = self.data_item_spec.get_elements()
@@ -74,7 +70,16 @@ class Storage(metaclass=ABC):
         result["units"] = {str(data_type): self.data_item_spec.get_unit(data_type) for data_type in self.data_item_spec.get_elements()}
         return result
 
-    def dump(self) -> List[str]:
+    def addMeasurement(self, data_item: DataItem, no_zeros: bool = False, min_time_spacing=None):
+        if no_zeros is True and data_item.is_zero() is True:
+            return
+        if (min_time_spacing is not None and
+                (datetime.fromtimestamp(data_item.timestamp) - datetime.fromtimestamp(
+                    self.last_time())).total_seconds() < min_time_spacing):
+            return
+        self.add_data_item(data_item)
+
+    def dump(self) -> list[str]:
         result = [f"Dump of circular buffer",
                   f"Number of items: {self.length()}",
                   f"min_time_index = {self.min_time_index()} @ time {self.get_data_item(self.min_time_index()).get_timestamp_str()}",
@@ -96,7 +101,7 @@ class CircularStorage(Storage, metaclass=ABCMeta):
     kept up to date.
     """
 
-    def __init__(self, num_elems: int, elems: List[str]):
+    def __init__(self, num_elems: int, elems: list[str]):
         Storage.__init__(self, elems)
         self.num_elems = num_elems
         self.head = 0  # position in the data array of the next item
@@ -163,7 +168,7 @@ class CircularStorage(Storage, metaclass=ABCMeta):
             if abs(hi - lo) <= 1:
                 return lo if timestamp - self.get_data_item(lo).get_timestamp() < self.get_data_item(hi).get_timestamp() - timestamp else hi
 
-    def dump(self) -> List[str]:
+    def dump(self) -> list[str]:
         result = [f"Dump of circular buffer",
                   f"Number of items: {self.length()}",
                   f"min_time_index = {self.min_time_index()} @ time {self.get_data_item(self.min_time_index()).get_timestamp_str()}",
@@ -183,7 +188,7 @@ class LinearStorage(Storage, metaclass=ABCMeta):
     Abstract Base Class for a linear buffer holding timed data, with no end.
     """
 
-    def __init__(self, elems: List[str]):
+    def __init__(self, elems: list[str]):
         Storage.__init__(self, elems)
 
     def min_time_index(self) -> int:
@@ -226,14 +231,14 @@ class LinearStorage(Storage, metaclass=ABCMeta):
 
 class MemStorage(Storage, metaclass=ABCMeta):
 
-    def __init__(self, elems: List[str]):
+    def __init__(self, elems: list[str]):
         super().__init__(elems)
         self.data = []
 
     def length(self) -> int:
         return len(self.data)
 
-    def get_data_item(self, idx: int) -> Optional[DataItem]:
+    def get_data_item(self, idx: int) -> DataItem | None:
         try:
             return self.data[idx]
         except IndexError:
@@ -248,7 +253,7 @@ class MemStorage(Storage, metaclass=ABCMeta):
 
 class PersistentStorage(Storage, metaclass=ABCMeta):
 
-    def __init__(self, elems: List[str], db_interface: DBInterface, table: str):
+    def __init__(self, elems: list[str], db_interface: DBInterface, table: str):
         super().__init__(elems)
         self.db_interface = db_interface
         self.table = table
@@ -268,7 +273,7 @@ class PersistentStorage(Storage, metaclass=ABCMeta):
         array = data_item.to_array(self.data_item_spec)
         self.db_interface.insert_data_item(self.table, idx, self.data_item_spec, array)
 
-    def serialize(self, signals: List[DataType] = None) -> Dict:  # override as element-wise data retrieval would be too slow in database implementation
+    def serialize(self, signals: list[str] = None) -> dict:  # override as element-wise data retrieval would be too slow in database implementation
         all_data = self.db_interface.get_all_data(self.table)
         res = {}
         for item in all_data:
@@ -280,21 +285,21 @@ class PersistentStorage(Storage, metaclass=ABCMeta):
 
 class CircularMemStorage(CircularStorage, MemStorage):
 
-    def __init__(self, num_elems: int, elems: List[str]):
+    def __init__(self, num_elems: int, elems: list[str]):
         CircularStorage.__init__(self, num_elems, elems)
         MemStorage.__init__(self, elems)
 
 
 class CircularPersistentStorage(CircularStorage, PersistentStorage):
 
-    def __init__(self, num_elems: int, elems: List[str], db_interface: DBInterface, table: str):
+    def __init__(self, num_elems: int, elems: list[str], db_interface: DBInterface, table: str):
         CircularStorage.__init__(self, num_elems=num_elems, elems=elems)
         PersistentStorage.__init__(self, elems=elems, db_interface=db_interface, table=table)
 
 
 class LinearPersistentStorage(LinearStorage, PersistentStorage):
 
-    def __init__(self, elems: List[str], db_interface: DBInterface, table: str):
+    def __init__(self, elems: list[str], db_interface: DBInterface, table: str):
         LinearStorage.__init__(self, elems=elems)
         PersistentStorage.__init__(self, elems=elems, db_interface=db_interface, table=table)
 

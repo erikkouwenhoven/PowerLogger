@@ -29,7 +29,7 @@ class Scheduler:
                               minutes=sched_job.interval_minutes,
                               kwargs=kwargs,
                               start_date=datetime.now() + timedelta(minutes=sched_job.start_delay_minutes),
-                              job_id=job_name)
+                              id=job_name)
         scheduler.start()
 
     def exec_job(self, **kwargs):
@@ -42,7 +42,7 @@ class Scheduler:
                                               operand=kwargs['operand'])
 
 
-class ScheduledJob:
+class ScheduledJob:  # TODO dataclass
 
     def __init__(self, job_name: str):
         self.job_name = job_name

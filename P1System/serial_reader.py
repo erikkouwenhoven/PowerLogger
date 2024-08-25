@@ -14,11 +14,11 @@ class SerialReader:
         logging.info("Available ports:")
         for port in ports:
             logging.debug(f"  {port.name}")
-        self.port = self.initPort(serial_settings)
+        self.port = self.init_port(serial_settings)
         self.stop_running = False  # for signalling to stop running
 
     @staticmethod
-    def initPort(serial_settings: SerialSettings):
+    def init_port(serial_settings: SerialSettings):
         try:
             port = serial.Serial(
                 port=serial_settings.port,
@@ -44,7 +44,7 @@ class SerialReader:
     #             except serial.SerialException:
     #                 logging.error("SerialException while reading")
     #
-    def getLine(self):
+    def get_line(self):
         if self.port:
             try:
                 line = self.port.readline()

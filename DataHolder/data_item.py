@@ -1,7 +1,5 @@
 from __future__ import annotations
-from typing import List, Dict, Optional, Union
 from datetime import datetime
-from DataHolder.data_types import DataType
 
 
 class DataItemSpec:
@@ -17,22 +15,22 @@ class DataItemSpec:
         - are associated with a unit
     """
 
-    def __init__(self, types_units: Dict[DataType, str]):
+    def __init__(self, types_units: dict[str, str | None]):
         """
-        types_units is a dict DataType: unit
+        types_units is a dict singal name: unit
         Self.elements is a dict with key the signal type, and value the unit and the index in the data array.
         """
-        self.elements: Dict[DataType, tuple[str, int]] = {k: (types_units[k], idx) for idx, k in enumerate(types_units)}
+        self.elements: dict[str, tuple[str, int]] = {k: (types_units[k], idx) for idx, k in enumerate(types_units)}
 
-    def add_element(self, data_type: DataType, unit: str):
+    def add_element(self, data_type: str, unit: str):
         n = len(self.elements)
         self.elements[data_type] = (unit, n)
 
-    def set_unit(self, data_type: DataType, unit: str):
+    def set_unit(self, data_type: str, unit: str):
         existing_unit, idx = self.elements[data_type]
         self.elements[data_type] = (unit, idx)
 
-    def get_unit(self, data_type: DataType) -> str:
+    def get_unit(self, data_type: str) -> str:
         return self.get_element(data_type)[0]
 
     def check_units(self, other):
@@ -47,10 +45,10 @@ class DataItemSpec:
                     else:
                         assert unit == other_unit
 
-    def get_elements(self) -> List[DataType]:
+    def get_elements(self) -> list[str]:
         return [data_type for data_type in self.elements]
 
-    def get_element(self, data_type: DataType) -> tuple[str, int]:
+    def get_element(self, data_type: str) -> tuple[str, int]:
         try:
             return self.elements[data_type]
         except KeyError:
@@ -62,7 +60,7 @@ class DataItemSpec:
                 return data_type
 
     @classmethod
-    def from_names(cls, names: List[str]):
+    def from_names(cls, names: list[str]):
         return cls({name: None for name in names})
 
 
@@ -71,14 +69,14 @@ class DataItem:
 
     def __init__(self, data_item_spec: DataItemSpec, timestamp: float = None):
         self.data_item_spec: DataItemSpec = data_item_spec
-        self.timestamp: Optional[float] = timestamp
-        self.item_data: List[Optional[float]] = [None] * (len(data_item_spec.get_elements()) + 1)
+        self.timestamp: float | None = timestamp
+        self.item_data: list[float | None] = [None] * (len(data_item_spec.get_elements()) + 1)
 
-    def get_value(self, element: DataType) -> float:
+    def get_value(self, element: str) -> float:
         unit, idx = self.data_item_spec.get_element(element)
         return self.item_data[idx + 1]
 
-    def get_value_and_unit(self, element: DataType) -> str:
+    def get_value_and_unit(self, element: str) -> str:
         unit, idx = self.data_item_spec.get_element(element)
         return f"{self.item_data[idx + 1]} {unit}"
 
@@ -87,7 +85,7 @@ class DataItem:
         unit, idx = self.data_item_spec.get_element(data_type)
         self.item_data[idx + 1] = value
 
-    def add_value(self, element: DataType, value: float, unit: str):
+    def add_value(self, element: str, value: float, unit: str):
         self.data_item_spec.add_element(element, unit)
         unit, idx = self.data_item_spec.get_element(element)
         assert idx == len(self.item_data) - 1
@@ -108,7 +106,7 @@ class DataItem:
         return all([self.item_data[idx] == 0.0 for idx in range(1, len(self.item_data))])
 
     @classmethod
-    def from_array(cls, array: List[float], data_item_spec: DataItemSpec):
+    def from_array(cls, array: list[float], data_item_spec: DataItemSpec):
         data_item = cls(data_item_spec, timestamp=array[0])
         for i, element in enumerate(data_item_spec.get_elements()):
             unit, idx = data_item_spec.get_element(element)
@@ -116,7 +114,7 @@ class DataItem:
                 data_item.item_data[idx + 1] = value
         return data_item
 
-    def to_array(self, data_item_spec: DataItemSpec) -> List[Optional[float]]:
+    def to_array(self, data_item_spec: DataItemSpec) -> list[float | None]:
         array = [None] * (len(data_item_spec.get_elements()) + 1)
         array[0] = self.timestamp
         for i, element in enumerate(data_item_spec.get_elements()):

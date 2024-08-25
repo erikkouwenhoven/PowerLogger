@@ -1,5 +1,5 @@
 from enum import Enum, auto
-from typing import List, Dict, Optional, Union
+from typing import Union
 from datetime import datetime
 from DataHolder.data_item import DataItemSpec, DataItem
 
@@ -42,11 +42,11 @@ class P1Value:
     """
     def __init__(self, datatype: P1DataType):
         self.dataType = datatype
-        self.value: Optional[Union[float, datetime]] = None
-        self.unit: Optional[bytes] = None
-        self.extra_timestamp: Optional[datetime] = None
+        self.value: Union[float, datetime] | None = None
+        self.unit: bytes | None = None
+        self.extra_timestamp: datetime | None = None
 
-    def setValue(self, value: Union[float, bytes], unit: bytes = None):
+    def set_value(self, value: Union[float, bytes], unit: bytes = None):
         if value is not None:
             if self.dataType == P1DataType.TIMESTAMP:
                 # assert type(value) == bytes
@@ -65,7 +65,7 @@ class P1Value:
         return self.extra_timestamp
 
     @staticmethod
-    def decode_time(value: bytes) -> Optional[datetime]:
+    def decode_time(value: bytes) -> datetime | None:
         try:
             return datetime.strptime(value.decode()[:12], "%y%m%d%H%M%S")
         except ValueError:
@@ -76,28 +76,28 @@ class P1Sample:
     """
         Contains one sample, i.e. a dict of Values
     """
-    def __init__(self, datatypes: List[P1DataType]):
-        self.data: Dict[P1DataType, P1Value] = {datatype: None for datatype in datatypes}
+    def __init__(self, datatypes: list[P1DataType]):
+        self.data: dict[P1DataType, P1Value | None] = {datatype: None for datatype in datatypes}
 
-    def addValue(self, value: P1Value):
+    def add_value(self, value: P1Value):
         self.data[value.dataType] = value
 
-    def getValue(self, datatype: P1DataType) -> P1Value:
+    def get_value(self, datatype: P1DataType) -> P1Value:
         return self.data[datatype]
 
-    def getValueFromName(self, name: str) -> P1Value:
+    def get_value_from_name(self, name: str) -> P1Value:
         return self.data[P1DataType.get_from_name(name)]
 
-    def get_data_types(self) -> List[P1DataType]:
+    def get_data_types(self) -> list[P1DataType]:
         return [key for key in self.data if key != P1DataType.TIMESTAMP]
 
-    def get_timestamp(self) -> Optional[datetime]:
+    def get_timestamp(self) -> datetime | None:
         try:
             return self.data[P1DataType.TIMESTAMP].value
         except KeyError:
             return None
 
-    def get_extra_value_signals(self) -> List[P1DataType]:
+    def get_extra_value_signals(self) -> list[P1DataType]:
         res = []
         for key in self.data:
             if value := self.data[key]:
@@ -114,7 +114,7 @@ class P1Sample:
                 raise NotImplementedError
             return extra_signals[0]
 
-    def get_data_types_units(self, signals) -> Dict[str, str]:
+    def get_data_types_units(self, signals) -> dict[str, str]:
         res = {}
         for key in self.data:
             if key.name in signals and key != P1DataType.TIMESTAMP:
@@ -124,24 +124,24 @@ class P1Sample:
                     res[key.name] = None
         return res
 
-    def to_data_item_spec(self, signals: List[str]) -> DataItemSpec:
+    def to_data_item_spec(self, signals: list[str]) -> DataItemSpec:
         result = self.get_data_types_units(signals)
         return DataItemSpec(result)
 
-    def to_data_item(self, signals: List[str]) -> DataItem:
-        if (value := self.getValue(P1DataType.TIMESTAMP)) is not None:
+    def to_data_item(self, signals: list[str]) -> DataItem:
+        if (value := self.get_value(P1DataType.TIMESTAMP)) is not None:
             data_item = DataItem(self.to_data_item_spec(signals), timestamp=datetime.timestamp(value.value))
             for element in data_item.data_item_spec.get_elements():
                 unit, idx = data_item.data_item_spec.get_element(element)
-                if (value := self.getValueFromName(element)) is not None:
+                if (value := self.get_value_from_name(element)) is not None:
                     data_item.item_data[idx + 1] = value.value
             return data_item
 
     def extra_signal_to_data_item(self, extra_signal: str):
-        if extra_value := self.getValueFromName(extra_signal):
+        if extra_value := self.get_value_from_name(extra_signal):
             data_item = DataItem(self.to_data_item_spec([extra_signal]),
                                  timestamp=datetime.timestamp(extra_value.get_extra_timestamp()))
-            data_item.set_value(str(extra_signal), self.getValueFromName(extra_signal).value)
+            data_item.set_value(str(extra_signal), self.get_value_from_name(extra_signal).value)
             return data_item
 
     def __str__(self):
@@ -149,8 +149,8 @@ class P1Sample:
             S = f"{len(self.data)} data items\n"
             for item in self.data:
                 if self.data[item]:
-                    unitStr = self.data[item].unit if self.data[item].unit else ""
-                    S += f"{item}: {self.data[item].value} {unitStr}\n"
+                    unit_str = self.data[item].unit if self.data[item].unit else ""
+                    S += f"{item}: {self.data[item].value} {unit_str}\n"
             return S
         else:
             return ""

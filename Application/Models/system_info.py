@@ -1,32 +1,31 @@
 import os
 import psutil
 from datetime import datetime
-from typing import Dict
-from Application.processor import Processor
+from Application.inquirer import Inquirer
 from DataHolder.db_interface import DBInterface
 
 
 class SystemInfo:
 
-    def __init__(self, processor: Processor):
-        self.processor = processor
+    def __init__(self, inquirer: Inquirer):
+        self.inquirer = inquirer
         self.info = self.get_info()
 
-    def get_info(self) -> Dict[str, str]:
+    def get_info(self) -> dict[str, str]:
         info = self.get_general_info()
         info = dict(info, **self.get_sys_info())
         info = dict(info, **self.get_app_info())
         return info
 
-    def get_general_info(self) -> Dict[str, str]:
+    def get_general_info(self) -> dict[str, str]:
         return {
-            "Time start logging": str(self.processor.get_P1_start_time()),
-            "Meter clock": str(self.processor.get_P1_clock()),
+            "Time start logging": str(self.inquirer.get_P1_start_time()),
+            "Meter clock": str(self.inquirer.get_P1_clock()),
             "Server clock": str(datetime.now())
         }
 
     @staticmethod
-    def get_sys_info() -> Dict[str, str]:
+    def get_sys_info() -> dict[str, str]:
         return {
             "Number of CPUs": psutil.cpu_count(),
             "CPU frequency": psutil.cpu_freq().current,
@@ -39,7 +38,7 @@ class SystemInfo:
         }
 
     @staticmethod
-    def get_app_info() -> Dict[str, str]:
+    def get_app_info() -> dict[str, str]:
         return {
             "Database": DBInterface.db_file_name(),
             "Size of database": os.path.getsize(DBInterface.db_file_name()),

@@ -5,14 +5,14 @@ from Utils.settings import Settings
 from Application.application import Application
 
 
-def initializeLogging(pathToFile):
-    if pathToFile is None:
-        pathToFile = '.'
-    if not os.path.exists(pathToFile):
-        os.makedirs(pathToFile)
-        print('Directory {} aangemaakt'.format(pathToFile))
+def initialize_logging(path_to_file):
+    if path_to_file is None:
+        path_to_file = '.'
+    if not os.path.exists(path_to_file):
+        os.makedirs(path_to_file)
+        print('Directory {} aangemaakt'.format(path_to_file))
     filename = Settings().logging_filename()
-    filepath = os.path.join(pathToFile, filename)
+    filepath = os.path.join(path_to_file, filename)
     logging.getLogger().setLevel(logging.DEBUG)
     handler = logging.handlers.RotatingFileHandler(filepath,
                                                    mode='w',
@@ -30,5 +30,5 @@ def initializeLogging(pathToFile):
 
 
 if __name__ == "__main__":
-    initializeLogging(Settings().logging_path())
+    initialize_logging(Settings().logging_path())
     Application()

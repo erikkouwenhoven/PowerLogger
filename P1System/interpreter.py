@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime
-from typing import List, Optional, Callable
 from P1System.data_classes import P1DataType, P1Sample
 from P1System.data_classes import P1Value
 from P1System.serial_reader import SerialReader
@@ -40,31 +39,30 @@ class Interpreter:
     def __init__(self, serial_settings: SerialSettings):
         self.reader: SerialReader = SerialReader(serial_settings)
         self._stop_running: bool = False
-        self._raw_lines: List[str] = []
-        self.start_time: Optional[datetime] = None
-        self.num_samples: Optional[int] = None
-        self.sampling_period: Optional[float] = None
+        self._raw_lines: list[str] = []
+        self.start_time: datetime | None = None
+        self.num_samples: int | None = None
+        self.sampling_period: float | None = None
 
     def sync_sample(self):
-        line = self.reader.getLine()
+        line = self.reader.get_line()
         while line and self.startTelegram not in line:
-            line = self.reader.getLine()
+            line = self.reader.get_line()
 
-    def get_sample(self, requested_values: List[str]) -> P1Sample:
-        requested_P1DataTypes = [P1DataType[req_val] for req_val in requested_values]
-        sample = P1Sample(requested_P1DataTypes)
-        line = self.reader.getLine()
+    def get_sample(self, requested_values: list[P1DataType]) -> P1Sample:
+        sample = P1Sample(requested_values)
+        line = self.reader.get_line()
         self._raw_lines.clear()
         while line and self.startTelegram not in line:
             self._raw_lines.append(line)
-            reset, value = self.decode(line, requested_P1DataTypes)
+            reset, value = self.decode(line, requested_values)
             assert reset is False
             if value:
-                sample.addValue(value)
-            line = self.reader.getLine()
+                sample.add_value(value)
+            line = self.reader.get_line()
         return sample
 
-    def runContinuously(self, requested_values: List[str], post_sample_cb: Callable[[P1Sample], None]):
+    def run_continuously(self, requested_values: list[P1DataType], post_sample_cb: callable(P1Sample)):
         logging.info(f"Start continuous sampling for values {requested_values}")
         self._stop_running = False
         self.start_time = datetime.now()
@@ -78,7 +76,7 @@ class Interpreter:
     def stop_running(self):
         self._stop_running = True
 
-    def decode(self, line: bytes, requested_values: List[P1DataType]) -> (bool, float):
+    def decode(self, line: bytes, requested_values: list[P1DataType]) -> (bool, float):
         if self.startTelegram in line:
             return True, None
         else:
@@ -86,29 +84,28 @@ class Interpreter:
 #        print("Decode request for line {}".format(line))
 #        print(f"obisCode: {self.obisCode}")
         for req in requested_values:
-#            print("processing request {} i.e. {}".format(req, self.obisCode[req]))
             if req in self.obisCode:
                 pos = line.find(self.obisCode[req])
                 if pos != -1:
-    #                print(f"Found {req} at pos {pos}")
-                    bracketOpen = line.rfind(b'(', pos)  # Last occurrence, for gas
-                    bracketClose = line.rfind(b')', pos)
+                    bracket_open = line.rfind(b'(', pos)  # Last occurrence, for gas
+                    bracket_close = line.rfind(b')', pos)
     #                print("haakje open {} haakje dicht {}".format(bracketOpen, bracketClose))
-                    if bracketOpen != -1 and bracketClose != -1:
-                        value = self.decode_value(req, line[bracketOpen + 1:bracketClose], self.second_value(line, bracketOpen))
+                    if bracket_open != -1 and bracket_close != -1:
+                        value = self.decode_value(req, line[bracket_open + 1:bracket_close],
+                                                  self.second_value(line, bracket_open))
                         if value:
                             return reset, value
         return False, None
 
     @staticmethod
-    def second_value(line: bytes, bracketOpen: int):
-        if (bracketOpen_2 := line.find(b'(')) != bracketOpen:
-            bracketClose_2 = line.find(b')')
-            return line[bracketOpen_2 + 1:bracketClose_2]
+    def second_value(line: bytes, bracket_open: int):
+        if (bracket_open_2 := line.find(b'(')) != bracket_open:
+            bracket_close_2 = line.find(b')')
+            return line[bracket_open_2 + 1:bracket_close_2]
 
     @staticmethod
     def decode_value(datatype, encoded_str, extra):
-        retVal = P1Value(datatype)
+        ret_val = P1Value(datatype)
         split = encoded_str.find(b'*')
         if split != -1:
             try:
@@ -117,12 +114,12 @@ class Interpreter:
                 value = None
                 logging.error(f"decodeValue: could not convert {encoded_str} to float")
             unit = encoded_str[split + 1:]
-            retVal.setValue(value, unit=unit)
+            ret_val.set_value(value, unit=unit)
         else:
-            retVal.setValue(encoded_str)
+            ret_val.set_value(encoded_str)
         if extra:
-            retVal.set_extra_timestamp(extra)
-        return retVal
+            ret_val.set_extra_timestamp(extra)
+        return ret_val
 
     def get_raw_lines(self):
         return self._raw_lines

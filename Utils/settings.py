@@ -1,9 +1,9 @@
 import os
 import configparser
 from datetime import datetime
-from typing import List, Dict
+import serial
+
 from DataHolder.buffer_attrs import Persistency, LifeSpan
-from DataHolder.data_types import DataType
 from P1System.data_classes import P1DataType
 from Application.Models.operation import Operation
 
@@ -13,38 +13,39 @@ class Settings:
 
     def __init__(self):
         self.config = configparser.ConfigParser()
-        currDir = os.path.dirname(os.path.dirname(__file__))
-        configFilePath = os.path.join(currDir, 'config.ini')
-        self.config.read(configFilePath)
+        curr_dir = os.path.dirname(os.path.dirname(__file__))
+        config_file_path = os.path.join(curr_dir, 'config.ini')
+        self.config.read(config_file_path)
 
-    def smaHostname(self):
+    def sma_hostname(self):
         return self.config.get('CONNECTION', 'sma_host')
 
-    def smaPassword(self):
+    def sma_password(self):
         return self.config.get('CONNECTION', 'sma_pwd')
 
-    def webServerPort(self):
+    def web_server_port(self):
         return int(self.config.get('WEBSERVER', 'port'))
 
-    def rs232Port(self):
+    def rs232_port(self):
         return self.config.get('RS232', 'port')
 
-    def rs232Parity(self):
+    def rs232_parity(self):
         return eval(self.config.get('RS232', 'parity'))
 
-    def rs232Baud(self):
+    def rs232_baud(self):
         return int(self.config.get('RS232', 'baudrate'))
 
-    def rs232Stopbits(self):
+    def rs232_stopbits(self):
         return eval(self.config.get('RS232', 'stopbits'))
 
-    def rs232Bytesize(self):
+    def rs232_bytesize(self):
         return eval(self.config.get('RS232', 'bytesize'))
 
-    def get_measurement_p1_signals(self) -> List[P1DataType]:
-        return self.config.get('DATARETRIEVAL', 'p1_signals').split()
+    def get_measurement_p1_signals(self) -> list[P1DataType]:
+        signals: list[str] = self.config.get('DATARETRIEVAL', 'p1_signals').split()
+        return [P1DataType[signal] for signal in signals]
 
-    def get_data_stores(self): # -> List[str]:
+    def get_data_stores(self) -> list[str]:
         return self.config.get('DATASTORAGE', 'data_stores').split()
 
     def get_P1_data_store(self):
@@ -52,6 +53,9 @@ class Settings:
 
     def get_SMA_data_store(self):
         return self.config.get('DATASTORAGE', 'sma_data_store')
+
+    def get_ZWave_data_store(self) -> str:
+        return self.config.get('DATASTORAGE', 'zwave_data_store')
 
     def get_data_store_name(self, data_store_id) -> str:
         return self.config.get('DATASTORAGE', data_store_id + '_name')
@@ -64,10 +68,13 @@ class Settings:
         return LifeSpan.Circular if self.config.get('DATASTORAGE', data_store_id + '_lifespan') == "circular" \
             else LifeSpan.Linear
 
-    def get_data_store_sampling_period(self, data_store_id, fallback=None) -> int | None:
-        return int(self.config.get('DATASTORAGE', data_store_id + '_sampling_period'))
+    def get_data_store_sampling_period(self, data_store_id) -> int | None:
+        try:
+            return int(self.config.get('DATASTORAGE', data_store_id + '_sampling_period'))
+        except configparser.NoOptionError:
+            return None
 
-    def get_data_store_signals(self, data_store_id): # -> List[str]:
+    def get_data_store_signals(self, data_store_id) -> list[str]:
         return self.config.get('DATASTORAGE', data_store_id + '_signals').split()
 
     def get_data_store_buflen(self, data_store_id) -> int:
@@ -79,11 +86,11 @@ class Settings:
     def get_min_storage_time_diff_seconds(self) -> int:
         return int(self.config.get('DATASTORAGE', 'min_storage_time_diff_seconds'))
 
-    def scheduled_jobs(self): # -> List[str]:
+    def scheduled_jobs(self) -> list[str]:
         return self.config.get('SCHEDULER', 'scheduled_jobs').split()
 
     def interval_minutes(self, job_id) -> int:
-        return int(self.config.get('SCHEDULER', job_id + '_interval_minutes'))
+        return eval(self.config.get('SCHEDULER', job_id + '_interval_minutes'))
 
     def start_delay_minutes(self, job_id) -> int:
         parameter = self.config.get('SCHEDULER', job_id + '_start_delay_minutes')
@@ -107,7 +114,7 @@ class Settings:
 
     def sched_job_operation(self, job_id) -> tuple[Operation, str]:
         res = self.config.get('SCHEDULER', job_id + '_operation').split()
-        return Operation(res[0]), res[1]
+        return Operation[res[0]], res[1]
 
     def data_dir_name(self) -> str:
         return self.config.get('PATHS', 'data')
@@ -127,7 +134,7 @@ class Settings:
     def get_signal_to_shift(self) -> str:
         return self.config.get('PROCESSING', 'signal_to_shift')
 
-    def get_differential_source_signal(self) -> DataType:
+    def get_differential_source_signal(self) -> str:
         return self.config.get('PROCESSING', 'differential_source_signal')
 
     def get_filtered_data_store(self) -> str:
@@ -154,7 +161,7 @@ class Settings:
         else:
             return self.config.get('ZWAVE', 'device_linux')
 
-    def get_zwave_subscriptions(self) -> Dict[int, List[str]]:
+    def get_zwave_subscriptions(self) -> dict[int, list[str]]:
         res = {}
         for subscr in self.config.get('ZWAVE', 'subscriptions').split('\n'):
             split_res = subscr.split(':')
@@ -162,17 +169,3 @@ class Settings:
             val_ids = [val for val in split_res[1].split(',')]
             res[node] = val_ids
         return res
-
-    def get_ZWave_data_store(self, node: int, data_types: List[str]) -> str:
-        assert len(data_types) == 1  # Implemented for single data type
-        data_type = data_types[0]
-        if node == 2 and data_type == 'TEMPERATURE':
-            return self.get_data_store_name('zwave_node2_temperature')
-        elif node == 2 and data_type == 'RELATIVE_HUMIDITY':
-            return self.get_data_store_name('zwave_node2_humid')
-        elif node == 3 and data_type == 'TEMPERATURE':
-            return self.get_data_store_name('zwave_node3_temperature')
-        elif node == 3 and data_type == 'RELATIVE_HUMIDITY':
-            return self.get_data_store_name('zwave_node3_humid')
-        else:
-            raise NotImplementedError

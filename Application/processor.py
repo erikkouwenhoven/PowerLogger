@@ -2,14 +2,7 @@ import logging
 from datetime import datetime, timedelta
 import copy
 from Application.Models.operation import Operation
-from Utils.settings import Settings
-from P1System.p1_interface import P1Interface
-from P1System.data_classes import P1Sample
-from SMASystem.sma_interface import SMAInterface, SMADataType
-from ZWaveSystem.zwave_interface import ZWaveInterface
-from Application.Models.shift_info import ShiftInfo
 from DataHolder.data_item import DataItemSpec, DataItem
-from DataHolder.data_types import DataType
 from DataHolder.data_holder import DataHolder
 from DataHolder.storage import Storage
 from DataHolder.data_store import DataStore
@@ -17,7 +10,7 @@ from DataHolder.data_store import DataStore
 
 class Processor:
     """
-        Receives and handles events.
+    Processes data and obtains and stores derived data.
     """
 
     def __init__(self, data_holder: DataHolder):
@@ -53,13 +46,7 @@ class Processor:
 
         dest_end_time = self.data_holder.get_timerange(dest)[1]
         src_end_time = min([self.data_holder.get_timerange(source)[1] for source in sources])
-        if period := self.data_holder.data_store(dest).sampling_period:
-            t_updates = range(dest_end_time + self.data_holder.data_store(dest).sampling_period, src_end_time, period)
-        else:
-            ref_storage = self.data_holder.data_store(sources[0]).data
-            t_updates = ref_storage.timedIndexes(ref_storage.index_from_time(dest_end_time) + 1, None)
 
-        # eerst eens een merge proberen
         operand_data_stores = list(filter(lambda data_store: operand in data_store.signals,
                                           [self.data_holder.data_store(src) for src in sources]))
         assert len(operand_data_stores) == 1
@@ -73,14 +60,13 @@ class Processor:
                 for src in sources[1:]:
                     src_index = self.data_holder.data_store(src).data.index_from_time(datetime.fromtimestamp(data_item.get_timestamp()))
                     data_item.merge(self.data_holder.data_store(src).data.get_data_item(src_index))
-                self.data_holder.addMeasurement(dest, data_item)
+                self.data_holder.data_store(dest).data.addMeasurement(data_item)
 
         # Uitvoeren van operatie in-place
         if operation in (Operation.SHIFT, ):
-            ref_storage = self.data_holder.data_store(sources[0]).data  # TODO hier moet je filteren
-            i_updates = ref_storage.timedIndexes(ref_storage.index_from_time(dest_end_time) + 1, None)
+            i_updates = operand_data_store.data.timedIndexes(operand_data_store.data.index_from_time(dest_end_time) + 1, None)
             for i_update in i_updates:
-                data_item = ref_storage.get_data_item(i_update)
+                data_item = operand_data_store.data.get_data_item(i_update)
                 at_time = datetime.fromtimestamp(data_item.get_timestamp())
                 if operation == Operation.SHIFT:
                     shifted = self.shift(operand_data_store.data, operand, at_time, -1)
@@ -88,37 +74,22 @@ class Processor:
 
         # Uitvoeren van operatie met aanmaak nieuw DataItem
         if operation in (Operation.AVG, Operation.DIFF):
+            assert (period := self.data_holder.data_store(dest).sampling_period)
+            assert len(sources) == 1
             ref_storage = self.data_holder.data_store(sources[0]).data
-            i_updates = ref_storage.timedIndexes(ref_storage.index_from_time(dest_end_time) + 1, None)
-            for i_update in i_updates:
-                data_item = ref_storage.get_data_item(i_update)
-                at_time = datetime.fromtimestamp(data_item.get_timestamp())
-                if operation == Operation.AVG:
-                    shifted = self.average()
-                    data_item.set_value(operand, shifted)
+            at_time = dest_end_time + timedelta(seconds=period)
+            assert at_time <= src_end_time
+            if operation == Operation.AVG:
+                result_data_item = self.average(ref_storage, dest_end_time, at_time, [operand])
+            elif operation == Operation.DIFF:
+                result_data_item = self.differentiate(ref_storage, operand, at_time, timedelta(seconds=-period))
+            else:
+                raise NotImplementedError
+            self.data_holder.data_store(dest).data.addMeasurement(result_data_item)
 
-
-        for t_update in t_updates:
-            self.update(de)
-
-        if (source_timerange := self.data_holder.get_timerange(source)) is not None:
-            start_timestamp = datetime.timestamp(datetime.fromtimestamp(source_timerange[1]) - interval)
-            end_timestamp = source_timerange[1]
-            if start_timestamp < source_timerange[0]:
-                start_timestamp = source_timerange[0]
-
-            start_time = datetime.fromtimestamp(start_timestamp)
-            end_time = datetime.fromtimestamp(end_timestamp)
-            logging.debug(f"Time range for persistent value calculation: {start_time} > {end_time}")
-            # shift_info = ShiftInfo()
-            # shift_info.set_sampling_time(self.p1_interface.get_sampling_period())
-            avg_signals = [signal for signal in self.data_holder.data_store(dest).signals if signal not in exclude_signals]
-            derived_data_item = self.data_holder.get_average(source, start_time, end_time, avg_signals, shift_info)  # dit is een data-item
-            logging.debug(f"Average: {derived_data_item}")
-            self.data_holder.addMeasurement(dest, derived_data_item)
-
-    def average(self, storage: Storage, from_time: datetime, to_time: datetime, selected_signals: list[DataType]) -> DataItem:
-        data_item_spec = DataItemSpec({signal: self.data_item_spec.get_unit(signal) for signal in selected_signals})
+    @staticmethod
+    def average(storage: Storage, from_time: datetime, to_time: datetime, selected_signals: list[str]) -> DataItem:
+        data_item_spec = DataItemSpec({signal: storage.data_item_spec.get_unit(signal) for signal in selected_signals})
         sample = DataItem(data_item_spec, timestamp=0.5*(datetime.timestamp(from_time) + datetime.timestamp(to_time)))
         logging.debug(f"average: from = {from_time}, to = {to_time}, avg time = {datetime.fromtimestamp(sample.get_timestamp())}")
         for signal in selected_signals:
@@ -134,20 +105,25 @@ class Processor:
                 sample.set_value(signal, 0.0)
         return sample
 
-    def differentiate(self, storage: Storage, signal: str, at_time: datetime, diff_time: timedelta) -> float:
+    @staticmethod
+    def differentiate(storage: Storage, signal: str, at_time: datetime, diff_time: timedelta) -> DataItem:
         """
         Geeft het verschil van een signaal op een gegeven moment en een delta tijd daarvoor
         :param storage: Storage die de data bevat
         :param signal: Naam van het signaal
         :param at_time: Het moment van bepaling van het signaal
-        :param diff_time: tijdsverschil
+        :param diff_time: Het tijdsverschil
         :return: Het signaalverschil
         """
+        data_item_spec = DataItemSpec({signal: storage.data_item_spec.get_unit(signal)})
+        sample = DataItem(data_item_spec, timestamp=at_time.timestamp())
         curr = storage.get_data_item(storage.index_from_time(at_time)).get_value(signal)
-        prev = storage.get_data_item(storage.index_from_time(at_time) - diff_time).get_value(signal)
-        return curr - prev
+        prev = storage.get_data_item(storage.index_from_time(at_time - diff_time)).get_value(signal)
+        sample.set_value(signal, curr - prev)
+        return sample
 
-    def shift(self, storage: Storage, signal: str, at_time: datetime, shift_in_seconds: float) -> float:
+    @staticmethod
+    def shift(storage: Storage, signal: str, at_time: datetime, shift_in_seconds: float) -> float:
         """
         Verschuift het signaal in de tijd t.o.v. het tijdstip in het data-item
         :param storage: Storage die de data bevat
@@ -173,5 +149,5 @@ class Processor:
         return self.p1_interface.interpreter.start_time
 
     def get_P1_clock(self):
-        p1_sample = self.p1_interface.getSample()
+        p1_sample = self.p1_interface.get_sample()
         return p1_sample.get_timestamp()

@@ -29,7 +29,7 @@ class SMAInterface:
 
     @staticmethod
     def initConnection():
-        client = WebConnect(Settings().smaHostname(), Right.USER, Settings().smaPassword())
+        client = WebConnect(Settings().sma_hostname(), Right.USER, Settings().sma_password())
         result = client.auth()
         if result is True:
             logging.info(f"Initializing connection to SMA Interface: success")

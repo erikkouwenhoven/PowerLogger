@@ -1,12 +1,9 @@
-from datetime import datetime, timedelta
-from typing import List
 from Utils.settings import Settings
 from Application.Models.shift_info import ShiftInfo
-from DataHolder.storage import CircularMemStorage, CircularPersistentStorage, LinearPersistentStorage, DataItem
+from DataHolder.storage import CircularMemStorage, CircularPersistentStorage, LinearPersistentStorage
 from DataHolder.db_interface import DBInterface
 from DataHolder.buffer_attrs import Persistency, LifeSpan
 from DataHolder.data_store import DataStore
-from DataHolder.data_types import DataType
 
 
 class DataHolder:
@@ -15,19 +12,7 @@ class DataHolder:
     """
 
     def __init__(self):
-        self.data_stores: List[DataStore] = self.init_data_stores()
-
-    def addMeasurement(self, data_store_name: str, data_item: DataItem, no_zeros: bool = False, min_time_spacing=None):
-        if no_zeros is True and data_item.is_zero() is True:
-            return
-        if (min_time_spacing is not None and
-                (datetime.fromtimestamp(data_item.timestamp) - datetime.fromtimestamp(
-                    self.data_store(data_store_name).data.last_time())).total_seconds() < min_time_spacing):
-            return
-        self.data_store(data_store_name).data.add_data_item(data_item)
-
-    def get_average(self, data_store_name: str, from_time, to_time, selected_signals, shift_info: ShiftInfo):
-        return self.data_store(data_store_name).data.average(from_time, to_time, selected_signals, shift_info)
+        self.data_stores: list[DataStore] = self.init_data_stores()
 
     def get_timerange(self, data_store_name: str):
         return self.data_store(data_store_name).data.timestamp_range()
@@ -37,7 +22,7 @@ class DataHolder:
             if data_store.name == data_store_name:
                 return data_store
 
-    def init_data_stores(self) -> List[DataStore]:
+    def init_data_stores(self) -> list[DataStore]:
         data_stores = []
         data_store_ids = Settings().get_data_stores()
         for data_store_id in data_store_ids:
@@ -63,5 +48,5 @@ class DataHolder:
             data_stores.append(data_store)
         return data_stores
 
-    def get_data_stores(self) -> List[str]:
+    def get_data_stores(self) -> list[str]:
         return [data_store.name for data_store in self.data_stores]
