@@ -4,7 +4,7 @@ from datetime import datetime
 import serial
 
 from DataHolder.buffer_attrs import Persistency, LifeSpan
-from P1System.data_classes import P1DataType
+from P1System.p1_data_classes import P1DataType
 from Application.Models.operation import Operation
 
 

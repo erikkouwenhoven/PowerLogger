@@ -14,15 +14,15 @@ class Inquirer:
         self.plugins = plugins
 
     def get_P1_start_time(self) -> datetime:
-        if p1_interface := self._get_P1_interface():
+        if p1_interface := self.get_P1_interface():
             return p1_interface.interpreter.start_time
 
     def get_P1_clock(self):
-        if p1_interface := self._get_P1_interface():
+        if p1_interface := self.get_P1_interface():
             p1_sample = p1_interface.get_sample()
             return p1_sample.get_timestamp()
 
-    def _get_P1_interface(self):
+    def get_P1_interface(self):
         for plugin in self.plugins:
             if plugin.plugin_name == P1Plugin.plugin_name:
-                return plugin.p1_interface
+                return getattr(plugin, "p1_interface")

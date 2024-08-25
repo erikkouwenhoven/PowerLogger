@@ -1,8 +1,3 @@
-"""
-    https://github.com/Dymerz/SMA-SunnyBoy
-    https://sma-sunnyboy.readthedocs.io/en/latest/sma_sunnyboy.html
-"""
-
 import time
 import logging
 from enum import Enum, auto
@@ -10,6 +5,12 @@ from SMASystem.sma import WebConnect
 from SMASystem.key import Key
 from SMASystem.right import Right
 from Utils.settings import Settings
+
+
+"""
+    https://github.com/Dymerz/SMA-SunnyBoy
+    https://sma-sunnyboy.readthedocs.io/en/latest/sma_sunnyboy.html
+"""
 
 
 class SMADataType(Enum):

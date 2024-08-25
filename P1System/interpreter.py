@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
-from P1System.data_classes import P1DataType, P1Sample
-from P1System.data_classes import P1Value
+from P1System.p1_data_classes import P1DataType, P1Sample
+from P1System.p1_data_classes import P1Value
 from P1System.serial_reader import SerialReader
 from P1System.serial_settings import SerialSettings
 

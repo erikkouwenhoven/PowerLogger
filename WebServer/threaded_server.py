@@ -11,9 +11,9 @@ class ThreadedServer:
 
     def __init__(self, processor):
         self.request_handler = RequestHandler(processor)
-        self.runServer()
+        self.run_server()
 
-    def runServer(self):
+    def run_server(self):
         # Start the server in a new thread
         daemon = threading.Thread(name='daemon_server',
                                   target=self.start_server,
@@ -24,11 +24,11 @@ class ThreadedServer:
     @staticmethod
     def start_server(request_handler, port=80):
         """Start a simple webserver serving path on port"""
-        httpd = ThreadingHTTPServer(('', port), MakeHandlerClass(request_handler))
+        httpd = ThreadingHTTPServer(('', port), make_handler_class(request_handler))
         httpd.serve_forever()
 
 
-def MakeHandlerClass(init_args):
+def make_handler_class(init_args):
 
     class Handler(BaseHTTPRequestHandler):
 

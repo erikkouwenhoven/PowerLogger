@@ -1,7 +1,7 @@
-from P1System.data_classes import P1Sample
+from P1System.p1_data_classes import P1Sample
 from P1System.interpreter import Interpreter
 from P1System.serial_settings import SerialSettings
-from P1System.data_classes import P1DataType
+from P1System.p1_data_classes import P1DataType
 
 
 class P1Interface:

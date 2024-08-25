@@ -144,10 +144,3 @@ class Processor:
         interp = ((1 - float_part) * storage.get_data_item(index).get_value(signal) +
                   float_part * storage.get_data_item(index + 1).get_value(signal))
         return interp
-
-    def get_P1_start_time(self) -> datetime:  # TODO staat hier op een rare plek
-        return self.p1_interface.interpreter.start_time
-
-    def get_P1_clock(self):
-        p1_sample = self.p1_interface.get_sample()
-        return p1_sample.get_timestamp()

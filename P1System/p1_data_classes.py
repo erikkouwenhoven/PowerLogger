@@ -128,8 +128,9 @@ class P1Sample:
         result = self.get_data_types_units(signals)
         return DataItemSpec(result)
 
-    def to_data_item(self, signals: list[str]) -> DataItem:
+    def to_data_item(self, p1_signals: list[P1DataType]) -> DataItem:
         if (value := self.get_value(P1DataType.TIMESTAMP)) is not None:
+            signals = [p1_signal.name for p1_signal in p1_signals]
             data_item = DataItem(self.to_data_item_spec(signals), timestamp=datetime.timestamp(value.value))
             for element in data_item.data_item_spec.get_elements():
                 unit, idx = data_item.data_item_spec.get_element(element)

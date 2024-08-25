@@ -145,11 +145,11 @@ class CircularStorage(Storage, metaclass=ABCMeta):
         timestamp = time.timestamp()
         lo = self.min_time_index()
         hi = self.last_index()
-        iter = 0
+        iteration = 0
         while lo != hi:
-            iter += 1
-            if iter % 1000 == 0:
-                logging.debug(f"iter = {iter}")
+            iteration += 1
+            if iteration % 1000 == 0:
+                logging.debug(f"iter = {iteration}")
             m = (int((hi - lo) % self.length() / 2) + lo) % self.length()
             curr_value = self.get_data_item(m).get_timestamp()
             if curr_value < timestamp:
@@ -244,11 +244,11 @@ class MemStorage(Storage, metaclass=ABCMeta):
         except IndexError:
             return None
 
-    def append(self, item: DataItem):
-        self.data.append(item)
+    def append(self, data_item: DataItem):
+        self.data.append(data_item)
 
-    def insert(self, item: DataItem, idx: int):
-        self.data[idx] = item
+    def insert(self, data_item: DataItem, idx: int):
+        self.data[idx] = data_item
 
 
 class PersistentStorage(Storage, metaclass=ABCMeta):

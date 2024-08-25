@@ -34,4 +34,4 @@ class Application(Publisher):
         self.webServer = ThreadedServer(self.processor)
         self.scheduler = Scheduler(self.processor)
         # NB in onderstaande regel blijft het proces eeuwig hangen, hierna geen acties meer doen dus
-        self.get_plugin(P1Plugin.plugin_name).start()
+        getattr(self.get_plugin(P1Plugin.plugin_name), 'start')()

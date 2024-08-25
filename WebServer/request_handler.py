@@ -12,7 +12,7 @@ class RequestHandler:
         return self.inquirer.data_holder.data_store('real_time').data.str_last()
 
     def get_raw(self):
-        return self.inquirer.p1_interface.get_raw_lines()
+        return self.inquirer.get_P1_interface().get_raw_lines()
 
     def get_realtime_datadump(self):
         return self.inquirer.data_holder.data_store('real_time').data.dump()
@@ -29,7 +29,8 @@ class RequestHandler:
     def get_data_store_info(self, data_store_name: str) -> dict[str, any]:
         return self.inquirer.data_holder.data_store(data_store_name).data_store_info()
 
-    def get_shift_info(self, *args):
+    @staticmethod
+    def get_shift_info( *args):
         shift_info = ShiftInfo()
         return {"shift signal": shift_info.signal_to_shift, "shift in seconds": shift_info.shift_in_seconds}
 
@@ -46,4 +47,4 @@ class RequestHandler:
         return res
 
     def terminate(self, args):
-        self.inquirer.p1_interface.stop()
+        self.inquirer.get_P1_interface().stop()

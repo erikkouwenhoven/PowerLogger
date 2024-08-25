@@ -1,5 +1,4 @@
 from Utils.settings import Settings
-from Application.Models.shift_info import ShiftInfo
 from DataHolder.storage import CircularMemStorage, CircularPersistentStorage, LinearPersistentStorage
 from DataHolder.db_interface import DBInterface
 from DataHolder.buffer_attrs import Persistency, LifeSpan
@@ -34,7 +33,7 @@ class DataHolder:
             sampling_period = Settings().get_data_store_sampling_period(data_store_id)
             db = Settings().get_data_store_db(data_store_id) if persistency == Persistency.Persistent else None
             data_store = DataStore(name=name, persistency=persistency, lifespan=lifespan, signals=signals,
-                                   buf_len=buf_len, db=db)
+                                   sampling_period=sampling_period, buf_len=buf_len, db=db)
             if persistency == Persistency.Persistent and lifespan == LifeSpan.Circular:
                 db_interface = DBInterface(name, signals)
                 data_store.data = CircularPersistentStorage(buf_len, signals, db_interface, table=name)
