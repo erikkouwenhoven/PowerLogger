@@ -5,12 +5,13 @@ import json
 import threading
 from Utils.settings import Settings
 from WebServer.request_handler import RequestHandler
+from Application.inquirer import Inquirer
 
 
 class ThreadedServer:
 
-    def __init__(self, processor):
-        self.request_handler = RequestHandler(processor)
+    def __init__(self, inquirer: Inquirer):
+        self.request_handler = RequestHandler(inquirer)
         self.run_server()
 
     def run_server(self):

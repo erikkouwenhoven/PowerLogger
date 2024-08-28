@@ -31,7 +31,7 @@ class Application(Publisher):
 
         self.processor = Processor(self.data_holder)
         self.inquirer = Inquirer(self.data_holder, self.get_plugins())
-        self.webServer = ThreadedServer(self.processor)
+        self.webServer = ThreadedServer(self.inquirer)
         self.scheduler = Scheduler(self.processor)
         # NB in onderstaande regel blijft het proces eeuwig hangen, hierna geen acties meer doen dus
         getattr(self.get_plugin(P1Plugin.plugin_name), 'start')()

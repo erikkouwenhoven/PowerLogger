@@ -25,7 +25,7 @@ class Storage(ABC):
         pass
 
     @abstractmethod
-    def get_data_item(self, idx: int) -> DataItem:
+    def get_data_item(self, idx: int | None) -> DataItem:
         pass
 
     @abstractmethod
@@ -238,7 +238,7 @@ class MemStorage(Storage, metaclass=ABCMeta):
     def length(self) -> int:
         return len(self.data)
 
-    def get_data_item(self, idx: int) -> DataItem | None:
+    def get_data_item(self, idx: int | None) -> DataItem | None:
         try:
             return self.data[idx]
         except IndexError:
@@ -261,9 +261,10 @@ class PersistentStorage(Storage, metaclass=ABCMeta):
     def length(self) -> int:
         return self.db_interface.get_count(self.table)
 
-    def get_data_item(self, idx: int) -> DataItem:
-        res = self.db_interface.get_data_items(self.table, idx, self.data_item_spec.get_elements())
-        return DataItem.from_array(res, self.data_item_spec)
+    def get_data_item(self, idx: int | None) -> DataItem:
+        if idx is not None:
+            res = self.db_interface.get_data_items(self.table, idx, self.data_item_spec.get_elements())
+            return DataItem.from_array(res, self.data_item_spec)
 
     def append(self, data_item: DataItem):
         array = data_item.to_array(self.data_item_spec)

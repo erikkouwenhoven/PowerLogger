@@ -22,32 +22,32 @@ class Scheduler:
             kwargs = {'sources': sched_job.sources,
                       'dest': sched_job.destination,
                       'operation': sched_job.operation,
-                      'operand': sched_job.operand
+                      'operand': sched_job.operand,
+                      'id': job_name,
                       }
+            start_date = datetime.now() + timedelta(minutes=sched_job.delay_minutes if sched_job.delay_minutes else 0)
             scheduler.add_job(self.exec_job,
                               'interval',
                               minutes=sched_job.interval_minutes,
                               kwargs=kwargs,
-                              start_date=datetime.now() + timedelta(minutes=sched_job.start_delay_minutes),
+                              start_date=start_date,
                               id=job_name)
         scheduler.start()
 
     def exec_job(self, **kwargs):
-        job_id = kwargs['id']
-        job = self.scheduler.get_job(job_id=job_id)
-        interval = job.trigger.interval
+        print(f"exec_job {kwargs['id']}")
         self.processor.process_derived_signal(sources=kwargs['sources'],
                                               dest=kwargs['dest'],
                                               operation=kwargs['operation'],
-                                              operand=kwargs['operand'])
+                                              operands=kwargs['operand'])
 
 
-class ScheduledJob:  # TODO dataclass
+class ScheduledJob:
 
     def __init__(self, job_name: str):
         self.job_name = job_name
         self.sources = Settings().sched_job_sources(job_name)
         self.destination = Settings().sched_job_destination(job_name)
         self.interval_minutes = Settings().interval_minutes(job_name)
-        self.start_delay_minutes = Settings().start_delay_minutes(job_name)
+        self.delay_minutes = Settings().start_at_time(job_name)
         self.operation, self.operand = Settings().sched_job_operation(job_name)

@@ -24,7 +24,7 @@ class NetworkInterface:
             self.network.start()
 
     @staticmethod
-    def init_network() -> ZWaveNetwork:
+    def init_network() -> ZWaveNetwork | None:
         # Define some manager options
         try:
             options = ZWaveOption(Settings().get_device(), config_path=Settings().get_config(), user_path=".", cmd_line="")
@@ -36,11 +36,17 @@ class NetworkInterface:
             options.set_save_configuration(True)
             options.lock()
             network = ZWaveNetwork(options, autostart=False)
+            try:
+                logging.debug(f"Controller : {network.controller}")
+            except Exception as e:
+                logging.debug(f"Exception initializing ZWaveNetwork: {e}")
+                return None
             return network
         except ZWaveException as err:
             logging.debug(f"ZWaveException: {err}")
 
     def connect_dispatcher(self):
+        dispatcher.connect(self.network_failed, ZWaveNetwork.SIGNAL_NETWORK_FAILED)
         dispatcher.connect(self.network_started, ZWaveNetwork.SIGNAL_NETWORK_STARTED)
         dispatcher.connect(self.network_failed, ZWaveNetwork.SIGNAL_NETWORK_FAILED)
         dispatcher.connect(self.network_ready, ZWaveNetwork.SIGNAL_NETWORK_READY)

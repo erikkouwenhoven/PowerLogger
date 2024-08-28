@@ -1,8 +1,7 @@
 import os
 import configparser
-from datetime import datetime
+from Utils.time_delay import time_delay_minutes
 import serial
-
 from DataHolder.buffer_attrs import Persistency, LifeSpan
 from P1System.p1_data_classes import P1DataType
 from Application.Models.operation import Operation
@@ -92,19 +91,18 @@ class Settings:
     def interval_minutes(self, job_id) -> int:
         return eval(self.config.get('SCHEDULER', job_id + '_interval_minutes'))
 
-    def start_delay_minutes(self, job_id) -> int:
-        parameter = self.config.get('SCHEDULER', job_id + '_start_delay_minutes')
-        if parameter[0] == '@':
-            hour_str, minute_str = parameter[1:].split(':')
-            hour = int(hour_str) if hour_str else None
-            minute = int(minute_str)
-            curr_time = datetime.now()
-            delay = minute - curr_time.minute if minute - curr_time.minute > 0 else minute - curr_time.minute + 60
-            if hour:
-                delay += 60 * (hour - curr_time.hour if hour - curr_time.hour > 0 else hour - curr_time.hour + 24)
-            return delay
-        else:
-            return int(parameter)
+    def start_at_time(self, job_id) -> int | None:
+        """
+        Optionele parameter, indien niet ingevuld wordt None geretourneerd.
+        Geeft de tijd van de dag aan waarop de job moet starten in de vorm van hh:mm.
+        Het deel hh is optioneel, indien weggelaten wordt er ieder uur gestart.
+        Geeft de delay in minuten terug.
+        """
+        try:
+            time_str = self.config.get('SCHEDULER', job_id + '_start_at_time')
+        except configparser.NoOptionError:
+            return None
+        return time_delay_minutes(time_str)
 
     def sched_job_sources(self, job_id) -> list[str]:
         return self.config.get('SCHEDULER', job_id + '_sources').split()
@@ -112,9 +110,23 @@ class Settings:
     def sched_job_destination(self, job_id) -> str:
         return self.config.get('SCHEDULER', job_id + '_destination')
 
-    def sched_job_operation(self, job_id) -> tuple[Operation, str]:
+    def sched_job_operation(self, job_id) -> tuple[Operation, list[str]]:
+        """
+        Geeft een Operation en operand terug.
+        De operand heeft de vorm:
+        - lege lijst
+        - lijst van signaalnamen
+        - '*' ten teken dat alle signalen onderworpen dienen te worden aan de Operatie
+        """
         res = self.config.get('SCHEDULER', job_id + '_operation').split()
-        return Operation[res[0]], res[1]
+        operation = Operation[res[0]]
+        if len(res) <= 1:
+            operand = []
+        elif len(res) == 2:
+            operand = [res[1]]
+        else:
+            operand = res[1:]
+        return operation, operand
 
     def data_dir_name(self) -> str:
         return self.config.get('PATHS', 'data')

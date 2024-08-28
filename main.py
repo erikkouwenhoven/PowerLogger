@@ -3,6 +3,7 @@ import os
 from logging.handlers import RotatingFileHandler
 from Utils.settings import Settings
 from Application.application import Application
+# import faulthandler
 
 
 def initialize_logging(path_to_file):
@@ -30,5 +31,6 @@ def initialize_logging(path_to_file):
 
 
 if __name__ == "__main__":
+    # faulthandler.enable()
     initialize_logging(Settings().logging_path())
     Application()

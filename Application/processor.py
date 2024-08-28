@@ -6,17 +6,18 @@ from DataHolder.data_item import DataItemSpec, DataItem
 from DataHolder.data_holder import DataHolder
 from DataHolder.storage import Storage
 from DataHolder.data_store import DataStore
+from Utils.settings import Settings
 
 
 class Processor:
     """
-    Processes data and obtains and stores derived data.
+    Processes data to obtain and store derived data.
     """
 
     def __init__(self, data_holder: DataHolder):
         self.data_holder = data_holder
 
-    def process_derived_signal(self, sources: list[str], dest: str, operation: Operation, operand: str):
+    def process_derived_signal(self, sources: list[str], dest: str, operation: Operation, operands: list[str]):
         """
         De signalen van de bron data source worden in bewerkte vorm overgezet naar de destination data source. De tijd
         range waarover dat gebeurt wordt bepaald door wat er al aanwezig is in zowel source als destination. De tijdrange
@@ -41,13 +42,17 @@ class Processor:
         source_signals = [signal for source in sources for signal in self.data_holder.data_store(source).signals]
         dest_signals = [signal for signal in self.data_holder.data_store(dest).signals]
         assert all([dest_signal in source_signals for dest_signal in dest_signals])
-        assert operand in source_signals
-        assert len(dest_signals) == 1 or operand in dest_signals  # het resultaat van de operatie is ondubbelzinnig
+        if operands == ["*"]:
+            operands = source_signals
+        assert all([operand in source_signals for operand in operands])
+        assert len(dest_signals) == 1 or all([operand in dest_signals for operand in operands])  # het resultaat van de operatie is ondubbelzinnig
+        if Operation != Operation.AVG:
+            assert len(operands) == 1
 
         dest_end_time = self.data_holder.get_timerange(dest)[1]
         src_end_time = min([self.data_holder.get_timerange(source)[1] for source in sources])
 
-        operand_data_stores = list(filter(lambda data_store: operand in data_store.signals,
+        operand_data_stores = list(filter(lambda data_store: any(operand in data_store.signals for operand in operands),
                                           [self.data_holder.data_store(src) for src in sources]))
         assert len(operand_data_stores) == 1
         operand_data_store: DataStore = operand_data_stores[0]
@@ -69,8 +74,8 @@ class Processor:
                 data_item = operand_data_store.data.get_data_item(i_update)
                 at_time = datetime.fromtimestamp(data_item.get_timestamp())
                 if operation == Operation.SHIFT:
-                    shifted = self.shift(operand_data_store.data, operand, at_time, -1)
-                    data_item.set_value(operand, shifted)
+                    shifted = self.shift(operand_data_store.data, operands[0], at_time, -1)
+                    data_item.set_value(operands[0], shifted)
 
         # Uitvoeren van operatie met aanmaak nieuw DataItem
         if operation in (Operation.AVG, Operation.DIFF):
@@ -80,9 +85,10 @@ class Processor:
             at_time = dest_end_time + timedelta(seconds=period)
             assert at_time <= src_end_time
             if operation == Operation.AVG:
-                result_data_item = self.average(ref_storage, dest_end_time, at_time, [operand])
+                result_data_item = self.average(ref_storage, dest_end_time, at_time, operands)
             elif operation == Operation.DIFF:
-                result_data_item = self.differentiate(ref_storage, operand, at_time, timedelta(seconds=-period))
+                data_item_spec = DataItemSpec({Settings().get_differential_dest_signal(): Settings().get_differential_dest_unit()})
+                result_data_item = self.differentiate(ref_storage, operands[0], at_time, timedelta(seconds=-period), data_item_spec)
             else:
                 raise NotImplementedError
             self.data_holder.data_store(dest).data.addMeasurement(result_data_item)
@@ -106,19 +112,27 @@ class Processor:
         return sample
 
     @staticmethod
-    def differentiate(storage: Storage, signal: str, at_time: datetime, diff_time: timedelta) -> DataItem:
+    def differentiate(storage: Storage, signal: str, at_time: datetime, diff_time: timedelta, data_item_spec: DataItemSpec) -> DataItem:
         """
         Geeft het verschil van een signaal op een gegeven moment en een delta tijd daarvoor
         :param storage: Storage die de data bevat
-        :param signal: Naam van het signaal
+        :param signal: Naam van het bronsignaal
+        :param diff_signal: Naam van het resultaatsignaal
         :param at_time: Het moment van bepaling van het signaal
         :param diff_time: Het tijdsverschil
         :return: Het signaalverschil
         """
-        data_item_spec = DataItemSpec({signal: storage.data_item_spec.get_unit(signal)})
         sample = DataItem(data_item_spec, timestamp=at_time.timestamp())
-        curr = storage.get_data_item(storage.index_from_time(at_time)).get_value(signal)
-        prev = storage.get_data_item(storage.index_from_time(at_time - diff_time)).get_value(signal)
+        if curr_item := storage.get_data_item(storage.index_from_time(at_time)):
+            curr = curr_item.get_value(signal)
+        else:
+            sample.set_value(signal, 0.0)
+            return sample
+        if prev_item := storage.get_data_item(storage.index_from_time(at_time - diff_time)):
+            prev = prev_item.get_value(signal)
+        else:
+            sample.set_value(signal, 0.0)
+            return sample
         sample.set_value(signal, curr - prev)
         return sample
 
