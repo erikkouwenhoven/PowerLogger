@@ -41,11 +41,14 @@ class SystemInfo:
     def get_app_info() -> dict[str, str]:
         return {
             "Database": DBInterface.db_file_name(),
-            "Size of database": os.path.getsize(DBInterface.db_file_name()),
+            "Size of database (bytes)": os.path.getsize(DBInterface.db_file_name()),
         }
 
     @staticmethod
     def get_cpu_temp():
-        res = psutil.sensors_temperatures()
-        for key in res:
-            return res[key][0].current
+        try:
+            res = psutil.sensors_temperatures()
+            for key in res:
+                return res[key][0].current
+        except AttributeError:
+            return None  # On Windows the function sensors_temperatures is non existent

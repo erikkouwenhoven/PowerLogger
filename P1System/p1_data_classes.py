@@ -96,6 +96,8 @@ class P1Sample:
             return self.data[P1DataType.TIMESTAMP].value
         except KeyError:
             return None
+        except AttributeError:
+            return None
 
     def get_extra_value_signals(self) -> list[P1DataType]:
         res = []

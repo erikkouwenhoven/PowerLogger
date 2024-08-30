@@ -1,57 +1,59 @@
 import logging
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from enum import Enum, auto
+from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib import parse
 import json
 import threading
 from Utils.settings import Settings
-from WebServer.request_handler import RequestHandler
+from WebServer.request_executor import RequestExecutor
 from Application.inquirer import Inquirer
 
 
 class ThreadedServer:
 
     def __init__(self, inquirer: Inquirer):
-        self.request_handler = RequestHandler(inquirer)
+        self.request_executor = RequestExecutor(inquirer)
         self.run_server()
 
     def run_server(self):
         # Start the server in a new thread
         daemon = threading.Thread(name='daemon_server',
                                   target=self.start_server,
-                                  args=(self.request_handler, Settings().web_server_port()),
-                                  daemon=True)  # Set as a daemon so it will be killed once the main thread is dead.
+                                  args=(self.request_executor, Settings().web_server_port()),
+                                  daemon=True)  # Set as a daemon, so it will be killed once the main thread is dead.
         daemon.start()
 
     @staticmethod
-    def start_server(request_handler, port=80):
+    def start_server(request_executor: RequestExecutor, port=80):
         """Start a simple webserver serving path on port"""
-        httpd = ThreadingHTTPServer(('', port), make_handler_class(request_handler))
+        httpd = ThreadingHTTPServer(('', port), make_handler_class(request_executor))
         httpd.serve_forever()
 
 
-def make_handler_class(init_args):
+def make_handler_class(request_executor: RequestExecutor):
 
     class Handler(BaseHTTPRequestHandler):
 
-        URL_BROWSER_VIEWS = {
-            "/raw": "getRaw",
-            "/dumpdata": "getRealtimeDatadump",
-            "/": "getStr",
-        }
+        class ResponseReturn(Enum):
+            DATA = auto()
+            TEXT = auto()
 
-        URL_DATA_VIEWS = {
-            "/data_stores": "get_data_stores",
-            "/data_store_info": "get_data_store_info",
-            "/get_data": "get_data",
-            "/shift_info": "get_shift_info",
-            "/system_info": "get_system_info",
-            "/terminate": "terminate",
+        URL_VIEWS = {
+            "/data_stores": (ResponseReturn.DATA, "get_data_stores"),
+            "/data_store_info": (ResponseReturn.DATA, "get_data_store_info"),
+            "/get_data": (ResponseReturn.DATA, "get_data"),
+            "/shift_info": (ResponseReturn.DATA, "get_shift_info"),
+            "/system_info": (ResponseReturn.DATA, "get_system_info"),
+            "/raw": (ResponseReturn.TEXT, "getRaw"),
+            "/dumpdata": (ResponseReturn.TEXT, "getRealtimeDatadump"),
         }
 
         def __init__(self, *args, **kwargs):
             super(Handler, self).__init__(*args, **kwargs)
+            self.request_executor = None
 
         def do_HEAD(self):
+            logging.debug(f"HEAD request")
             self.send_response(200)
             self.send_header("Content-type", "text/html")
             self.end_headers()
@@ -59,32 +61,50 @@ def make_handler_class(init_args):
         def do_GET(self):
             """Respond to a GET request."""
             logging.debug(f"GET request: {self.path}")
-            parsed = parse.urlsplit(self.path)
-            self.send_response(200)
-            request_handler = self.init_args
-            if parsed.path in self.URL_DATA_VIEWS:
-                logging.debug(f"GET request is in URL_DATA_VIEWS")
-                self.send_header("Accept", "application/json")
+            parsed = parse.urlparse(self.path)
+
+            try:
+                view = getattr(self.request_executor, self.URL_VIEWS[parsed.path][1])
+            except KeyError:
+                self.send_response(200)
                 self.end_headers()
-                view = getattr(request_handler, self.URL_DATA_VIEWS[parsed.path])
+                self.wfile.write(b"<p>Unknown request; path: %b</p>" % self.path.encode())
+                self.wfile.write(b"<p>Usage: %b</p>" % self.help())
+                return
+            except AttributeError:
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"<p>Not implemented; path: %b</p>" % self.path.encode())
+                self.wfile.write(b"<p>Usage: %b</p>" % self.help())
+                return
+            try:
                 result = view(parsed.query)
-                logging.debug(f"result from do_GET {parsed.query}: {result}")
-                self.wfile.write(json.dumps(result).encode('utf-8'))
-            elif parsed.path in self.URL_BROWSER_VIEWS:
-                logging.debug(f"GET request is in URL_BROWSER_VIEWS")
-                self.send_header("Content-type", "text/html")
+            except AttributeError:
+                self.send_response(200)  # Bad request
                 self.end_headers()
+                self.wfile.write(b"<p>Unknown error path: %b</p>" % self.path.encode())
+                self.wfile.write(b"<p>Usage: %b</p>" % self.help())
+                return
+
+            self.send_response(200)
+            self.send_header("Content-type", "text/html")
+            self.send_header("Accept", "application/json")
+            self.end_headers()
+
+            if self.URL_VIEWS[parsed.path][0] == self.ResponseReturn.DATA:
+                self.wfile.write(json.dumps(result).encode('utf-8'))
+            else:
                 self.wfile.write(b"<html><head><title>Power logger</title></head>")
                 self.wfile.write(b"<body><p>Erik Kouwenhoven, 2023</p>")
                 self.wfile.write(b"<p>You accessed path: %b</p>" % self.path.encode())
-                view = getattr(request_handler, self.URL_BROWSER_VIEWS[parsed.path])
-                result = view()
                 for line in result:
                     self.wfile.write(line + b"<br>")
                 self.wfile.write(b"</body></html>")
-            else:
-                logging.error(f"Invalid request {self.path}")
+            logging.debug(f"result from do_GET {parsed.query}: {result}")
             logging.debug(f"GET request completed")
 
-    Handler.init_args = init_args
+        def help(self):
+            return f"Usage: {[key for key in self.URL_VIEWS]}".encode('utf-8')
+
+    Handler.request_executor = request_executor
     return Handler
