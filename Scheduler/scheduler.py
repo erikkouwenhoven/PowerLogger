@@ -19,19 +19,25 @@ class Scheduler:
         job_names = Settings().scheduled_jobs()
         for job_name in job_names:
             sched_job = ScheduledJob(job_name)
-            kwargs = {'sources': sched_job.sources,
-                      'dest': sched_job.destination,
-                      'operation': sched_job.operation,
-                      'operand': sched_job.operand,
-                      'id': job_name,
-                      }
-            start_date = datetime.now() + timedelta(minutes=sched_job.delay_minutes if sched_job.delay_minutes else 0)
-            scheduler.add_job(self.exec_job,
-                              'interval',
-                              minutes=sched_job.interval_minutes,
-                              kwargs=kwargs,
-                              start_date=start_date,
-                              id=job_name)
+            if self.processor.check_job_parameters(sources=sched_job.sources,
+                                                   dest=sched_job.destination,
+                                                   operation=sched_job.operation,
+                                                   operands=sched_job.operand) is True:
+                kwargs = {'sources': sched_job.sources,
+                          'dest': sched_job.destination,
+                          'operation': sched_job.operation,
+                          'operand': sched_job.operand,
+                          'id': job_name,
+                          }
+                start_date = datetime.now() + timedelta(minutes=sched_job.delay_minutes if sched_job.delay_minutes else 0)
+                scheduler.add_job(self.exec_job,
+                                  'interval',
+                                  minutes=sched_job.interval_minutes,
+                                  kwargs=kwargs,
+                                  start_date=start_date,
+                                  id=job_name)
+            else:
+                logging.error(f"Job {sched_job} not started")
         scheduler.start()
 
     def exec_job(self, **kwargs):

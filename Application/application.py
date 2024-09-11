@@ -25,13 +25,14 @@ class Application(Publisher):
     def __init__(self):
         super().__init__()
         self.data_holder = DataHolder()
-        P1Plugin(self, self.data_holder.data_store(Settings().get_P1_data_store()).data)
-        SMAPlugin(self, self.data_holder.data_store(Settings().get_SMA_data_store()).data)
-        ZWavePlugin(self, self.data_holder.data_store(Settings().get_ZWave_data_store()).data)
+        # assign to variable to prevent removal by garbage collector
+        p1_plugin = P1Plugin(self, self.data_holder.data_store(Settings().get_P1_data_store()).data)
+        sma_plugin = SMAPlugin(self, self.data_holder.data_store(Settings().get_SMA_data_store()).data)
+        zwave_plugin = ZWavePlugin(self, self.data_holder.data_store(Settings().get_ZWave_data_store()).data)
 
-        self.processor = Processor(self.data_holder)
         self.inquirer = Inquirer(self.data_holder, self.get_plugins())
         self.webServer = ThreadedServer(self.inquirer)
+        self.processor = Processor(self.data_holder)
         self.scheduler = Scheduler(self.processor)
         # NB in onderstaande regel blijft het proces eeuwig hangen, hierna geen acties meer doen dus
         getattr(self.get_plugin(P1Plugin.plugin_name), 'start')()

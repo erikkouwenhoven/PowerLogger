@@ -1,3 +1,4 @@
+from datetime import datetime
 from Utils.settings import Settings
 from DataHolder.storage import CircularMemStorage, CircularPersistentStorage, LinearPersistentStorage
 from DataHolder.db_interface import DBInterface
@@ -15,6 +16,14 @@ class DataHolder:
 
     def get_timerange(self, data_store_name: str):
         return self.data_store(data_store_name).data.timestamp_range()
+
+    def get_begin_time(self, data_store_name: str) -> datetime | None:
+        if time_range := self.get_timerange(data_store_name):
+            return datetime.fromtimestamp(time_range[0])
+
+    def get_end_time(self, data_store_name: str) -> datetime | None:
+        if time_range := self.get_timerange(data_store_name):
+            return datetime.fromtimestamp(time_range[1])
 
     def data_store(self, data_store_name: str) -> DataStore:
         for data_store in self.data_stores:

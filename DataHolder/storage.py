@@ -45,7 +45,7 @@ class Storage(ABC):
         pass
 
     @abstractmethod
-    def index_from_time(self, time: datetime) -> int:
+    def index_from_time(self, time: datetime) -> int | None:
         pass
 
     def last_time(self) -> float | None:
@@ -141,7 +141,9 @@ class CircularStorage(Storage, metaclass=ABCMeta):
                 for idx in range(to_index + 1):
                     yield idx
 
-    def index_from_time(self, time: datetime) -> int:
+    def index_from_time(self, time: datetime) -> int | None:
+        if time is None:
+            return None
         timestamp = time.timestamp()
         lo = self.min_time_index()
         hi = self.last_index()
@@ -212,7 +214,9 @@ class LinearStorage(Storage, metaclass=ABCMeta):
         for idx in range(from_index, to_index + 1):
             yield idx
 
-    def index_from_time(self, time: datetime) -> int:
+    def index_from_time(self, time: datetime) -> int | None:
+        if time is None:
+            return None
         timestamp = time.timestamp()
         lo = self.min_time_index()
         hi = self.last_index()

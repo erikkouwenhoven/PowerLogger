@@ -26,7 +26,10 @@ class Settings:
         return int(self.config.get('WEBSERVER', 'port'))
 
     def rs232_port(self):
-        return self.config.get('RS232', 'port')
+        if os.name == 'nt':
+            return self.config.get('RS232', 'port_windows')
+        else:
+            return self.config.get('RS232', 'port_linux')
 
     def rs232_parity(self):
         return eval(self.config.get('RS232', 'parity'))
@@ -166,6 +169,9 @@ class Settings:
             return self.config.get('ZWAVE', 'configpath_windows')
         else:
             return self.config.get('ZWAVE', 'configpath_linux')
+
+    def get_ZWave_logfile(self):
+        return self.config.get('ZWAVE', 'logfile')
 
     def get_device(self):
         if os.name == 'nt':

@@ -19,34 +19,25 @@ class NetworkInterface:
         """
         self.value_received_CB = value_received_cb
         self.network = self.init_network()
-        if self.network:
-            self.connect_dispatcher()
-            self.network.start()
+        # if self.network:
+        self.connect_dispatcher()
+        self.network.start()
 
     @staticmethod
-    def init_network() -> ZWaveNetwork | None:
+    def init_network() -> ZWaveNetwork:
         # Define some manager options
-        try:
-            options = ZWaveOption(Settings().get_device(), config_path=Settings().get_config(), user_path=".", cmd_line="")
-            # options.set_log_file(Settings().config["OpenZWaveSettings"]["Logging"]["Filename"])
-            options.set_append_log_file(False)
-            options.set_console_output(False)
-            options.set_save_log_level("Debug")
-            options.set_logging(True)
-            options.set_save_configuration(True)
-            options.lock()
-            network = ZWaveNetwork(options, autostart=False)
-            try:
-                logging.debug(f"Controller : {network.controller}")
-            except Exception as e:
-                logging.debug(f"Exception initializing ZWaveNetwork: {e}")
-                return None
-            return network
-        except ZWaveException as err:
-            logging.debug(f"ZWaveException: {err}")
+        options = ZWaveOption(device=Settings().get_device(), config_path=Settings().get_config(), user_path=".")
+        options.set_log_file(Settings().get_ZWave_logfile())
+        options.set_append_log_file(False)
+        options.set_console_output(False)
+        options.set_save_log_level("Debug")
+        options.set_logging(True)
+        options.set_save_configuration(True)
+        options.lock()
+        network = ZWaveNetwork(options, autostart=False)
+        return network
 
     def connect_dispatcher(self):
-        dispatcher.connect(self.network_failed, ZWaveNetwork.SIGNAL_NETWORK_FAILED)
         dispatcher.connect(self.network_started, ZWaveNetwork.SIGNAL_NETWORK_STARTED)
         dispatcher.connect(self.network_failed, ZWaveNetwork.SIGNAL_NETWORK_FAILED)
         dispatcher.connect(self.network_ready, ZWaveNetwork.SIGNAL_NETWORK_READY)
@@ -54,14 +45,18 @@ class NetworkInterface:
 
     def network_started(self, network):
         logging.info("***** Network has started")
+        print("***** Network has started")
 
     def network_failed(self, network):
         logging.info("***** Network has failed")
+        print("***** Network has failed")
 
     def network_ready(self, network):
         logging.info("***** Network is ready")
+        print("***** Network is ready")
 
     def network_awake(self, network):
+        print("***** Network is awake")
         logging.info("***** Network is awake")
         dispatcher.connect(self.value_update, ZWaveNetwork.SIGNAL_VALUE)
         dispatcher.connect(self.value_changed, ZWaveNetwork.SIGNAL_VALUE_CHANGED)

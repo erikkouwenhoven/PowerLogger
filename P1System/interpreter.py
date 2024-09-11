@@ -31,7 +31,7 @@ class Interpreter:
         P1DataType.CURRENT_PRODUCTION_PHASE1: b"1-0:22.7.0",
         P1DataType.CURRENT_PRODUCTION_PHASE2: b"1-0:42.7.0",
         P1DataType.CURRENT_PRODUCTION_PHASE3: b"1-0:62.7.0",
-        P1DataType.CUMULATIVE_GAS: b"0-1:24.2",  # TODO levert twee waarden, tijd en kuub
+        P1DataType.CUMULATIVE_GAS: b"0-1:24.2",
     }
 
     startTelegram = b'XMX5LGBBFG1012622655'

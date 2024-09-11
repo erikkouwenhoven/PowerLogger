@@ -17,6 +17,34 @@ class Processor:
     def __init__(self, data_holder: DataHolder):
         self.data_holder = data_holder
 
+    def check_job_parameters(self, sources: list[str], dest: str, operation: Operation, operands: list[str]) -> bool:
+        for data_store in sources + [dest]:
+            if self.data_holder.data_store(data_store) is None:
+                logging.error(f"check_job_parameters: Data store {data_store} is unknown")
+                return False
+
+        source_signals = [signal for source in sources for signal in self.data_holder.data_store(source).signals]
+        dest_signals = [signal for signal in self.data_holder.data_store(dest).signals]
+        if all([dest_signal in source_signals for dest_signal in dest_signals]) is False:
+            logging.error(f"check_job_parameters: Not all destination signals ({dest_signals}) in source signals ({source_signals})")
+            return False
+
+        if operands == ["*"]:
+            operands = source_signals
+        if all([operand in source_signals for operand in operands]) is False:
+            logging.error(f"check_job_parameters: Not all operands ({operands}) in source signals ({source_signals})")
+            return False
+
+        if len(dest_signals) == 1 or all([operand in dest_signals for operand in operands]) is False:
+            logging.error(f"check_job_parameters: The result signals of the operation are ambiguous: destination: {dest_signals}, operands: {operands}")
+            return False
+
+        if operation != Operation.AVG and len(operands) != 1:
+            logging.error(f"check_job_parameters: The operation {operation} requires exactly one operand, instead {len(operands)} are found")
+            return False
+
+        return True
+
     def process_derived_signal(self, sources: list[str], dest: str, operation: Operation, operands: list[str]):
         """
         De signalen van de bron data source worden in bewerkte vorm overgezet naar de destination data source. De tijd
@@ -46,11 +74,15 @@ class Processor:
             operands = source_signals
         assert all([operand in source_signals for operand in operands])
         assert len(dest_signals) == 1 or all([operand in dest_signals for operand in operands])  # het resultaat van de operatie is ondubbelzinnig
-        if Operation != Operation.AVG:
+        if operation != Operation.AVG:
             assert len(operands) == 1
 
-        dest_end_time = self.data_holder.get_timerange(dest)[1]
-        src_end_time = min([self.data_holder.get_timerange(source)[1] for source in sources])
+        dest_end_time = self.data_holder.get_end_time(dest)
+        try:
+            src_end_time = min([self.data_holder.get_end_time(source) for source in sources
+                                if self.data_holder.get_end_time(source) is not None])
+        except ValueError:
+            src_end_time = None
 
         operand_data_stores = list(filter(lambda data_store: any(operand in data_store.signals for operand in operands),
                                           [self.data_holder.data_store(src) for src in sources]))
@@ -59,7 +91,7 @@ class Processor:
 
         if len(sources) > 1:  # Merge
             ref_storage = self.data_holder.data_store(sources[0]).data
-            i_updates = ref_storage.timedIndexes(ref_storage.index_from_time(dest_end_time) + 1, None)
+            i_updates = ref_storage.timedIndexes(ref_storage.index_from_time(dest_end_time), None)
             for i_update in i_updates:
                 data_item = copy.deepcopy(ref_storage.get_data_item(i_update))
                 for src in sources[1:]:
@@ -69,7 +101,7 @@ class Processor:
 
         # Uitvoeren van operatie in-place
         if operation in (Operation.SHIFT, ):
-            i_updates = operand_data_store.data.timedIndexes(operand_data_store.data.index_from_time(dest_end_time) + 1, None)
+            i_updates = operand_data_store.data.timedIndexes(operand_data_store.data.index_from_time(dest_end_time), None)
             for i_update in i_updates:
                 data_item = operand_data_store.data.get_data_item(i_update)
                 at_time = datetime.fromtimestamp(data_item.get_timestamp())
@@ -146,15 +178,17 @@ class Processor:
         :param shift_in_seconds: verschuiving in seconden
         :return: De signaalwaarde op het verschoven tijdstip
         """
-        data_item = storage.get_data_item(storage.index_from_time(at_time))
-        assert signal in data_item.data_item_spec.get_elements()
-        goal_timestamp = data_item.timestamp + shift_in_seconds
-        index = storage.index_from_time(datetime.fromtimestamp(goal_timestamp))
-        if storage.get_data_item(index).get_timestamp() > goal_timestamp:
-            index -= 1
-        assert storage.get_data_item(index).get_timestamp() < goal_timestamp < storage.get_data_item(index + 1).get_timestamp()
-        float_part = ((goal_timestamp - storage.get_data_item(index).get_timestamp()) /
-                      (storage.get_data_item(index + 1).get_timestamp() - storage.get_data_item(index).get_timestamp()))
-        interp = ((1 - float_part) * storage.get_data_item(index).get_value(signal) +
-                  float_part * storage.get_data_item(index + 1).get_value(signal))
-        return interp
+        if data_item := storage.get_data_item(storage.index_from_time(at_time)):
+            assert signal in data_item.data_item_spec.get_elements()
+            goal_timestamp = data_item.timestamp + shift_in_seconds
+            index = storage.index_from_time(datetime.fromtimestamp(goal_timestamp))
+            if storage.get_data_item(index).get_timestamp() > goal_timestamp:
+                index -= 1
+            if storage.get_data_item(index).get_timestamp() < goal_timestamp < storage.get_data_item(index + 1).get_timestamp():
+                float_part = ((goal_timestamp - storage.get_data_item(index).get_timestamp()) /
+                              (storage.get_data_item(index + 1).get_timestamp() - storage.get_data_item(index).get_timestamp()))
+                interp = ((1 - float_part) * storage.get_data_item(index).get_value(signal) +
+                          float_part * storage.get_data_item(index + 1).get_value(signal))
+                return interp
+            else:
+                print(f"PANIC! interpolation at {goal_timestamp}, brackets {storage.get_data_item(index).get_timestamp(), storage.get_data_item(index + 1).get_timestamp()}")
