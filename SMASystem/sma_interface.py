@@ -26,10 +26,10 @@ class SMAInterface:
     c_POWER_UNIT = 'W'
 
     def __init__(self):
-        self.client = self.initConnection()
+        self.client = self.init_connection()
 
     @staticmethod
-    def initConnection():
+    def init_connection():
         client = WebConnect(Settings().sma_hostname(), Right.USER, Settings().sma_password())
         result = client.auth()
         if result is True:
@@ -38,29 +38,29 @@ class SMAInterface:
         else:
             logging.warning("Failed to initialize SMA interface")
 
-    def getCurrentPower(self):
-        self.validateConnection()
+    def get_current_power(self):
+        self.validate_connection()
         if self.client:
             return self.client.get_value(Key.power_current)
 
-    def getTotal(self):
-        self.validateConnection()
+    def get_total(self):
+        self.validate_connection()
         if self.client:
             return self.client.get_value(Key.productivity_total)
 
-    def getHistory(self, time_in_seconds):
-        self.validateConnection()
+    def get_history(self, time_in_seconds):
+        self.validate_connection()
         if self.client:
             now_time = int(time.time())
             return self.client.get_logger(now_time - time_in_seconds, now_time)
 
-    def validateConnection(self):
+    def validate_connection(self):
         if self.client:
             if self.client.check_connection() is False:
                 logging.error("SMA interface connection check failed")
-                self.client = self.initConnection()
+                self.client = self.init_connection()
         else:
-            self.client = self.initConnection()
+            self.client = self.init_connection()
 
     def __del__(self):
         if self.client:
@@ -69,5 +69,5 @@ class SMAInterface:
 
 if __name__ == "__main__":
     smaInterface = SMAInterface()
-    print(f"SMA power: {smaInterface.getCurrentPower()}")
+    print(f"SMA power: {smaInterface.get_current_power()}")
     print(f"SMA keys: {smaInterface.client.get_all_keys()}")

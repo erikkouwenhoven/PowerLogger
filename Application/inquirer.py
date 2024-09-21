@@ -19,7 +19,7 @@ class Inquirer:
 
     def get_P1_clock(self):
         if p1_interface := self.get_P1_interface():
-            p1_sample = p1_interface.get_sample()
+            p1_sample = p1_interface.get_current_sample()
             return p1_sample.get_timestamp()
 
     def get_P1_interface(self):

@@ -39,7 +39,7 @@ class Interpreter:
     def __init__(self, serial_settings: SerialSettings):
         self.reader: SerialReader = SerialReader(serial_settings)
         self._stop_running: bool = False
-        self._raw_lines: list[str] = []
+        self._raw_lines: list[bytes] = []
         self.start_time: datetime | None = None
         self.num_samples: int | None = None
         self.sampling_period: float | None = None
@@ -49,18 +49,18 @@ class Interpreter:
         while line and self.startTelegram not in line:
             line = self.reader.get_line()
 
-    def get_sample(self, requested_values: list[P1DataType]) -> P1Sample:
+    def get_sample(self, requested_values: list[P1DataType]) -> P1Sample | None:
         sample = P1Sample(requested_values)
-        line = self.reader.get_line()
-        self._raw_lines.clear()
-        while line and self.startTelegram not in line:
-            self._raw_lines.append(line)
-            reset, value = self.decode(line, requested_values)
-            assert reset is False
-            if value:
-                sample.add_value(value)
-            line = self.reader.get_line()
-        return sample
+        if line := self.reader.get_line():
+            self._raw_lines.clear()
+            while line and self.startTelegram not in line:
+                self._raw_lines.append(line)
+                reset, value = self.decode(line, requested_values)
+                assert reset is False
+                if value:
+                    sample.add_value(value)
+                line = self.reader.get_line()
+            return sample
 
     def run_continuously(self, requested_values: list[P1DataType], post_sample_cb: callable(P1Sample)):
         logging.info(f"Start continuous sampling for values {requested_values}")
@@ -68,10 +68,10 @@ class Interpreter:
         self.start_time = datetime.now()
         self.num_samples = 0
         while self._stop_running is False:
-            sample = self.get_sample(requested_values)
-            self.num_samples += 1
-            if post_sample_cb:
-                post_sample_cb(sample)
+            if sample := self.get_sample(requested_values):
+                self.num_samples += 1
+                if post_sample_cb:
+                    post_sample_cb(sample)
 
     def stop_running(self):
         self._stop_running = True
@@ -98,30 +98,37 @@ class Interpreter:
         return False, None
 
     @staticmethod
-    def second_value(line: bytes, bracket_open: int):
+    def second_value(line: bytes, bracket_open: int) -> bytes:
         if (bracket_open_2 := line.find(b'(')) != bracket_open:
             bracket_close_2 = line.find(b')')
             return line[bracket_open_2 + 1:bracket_close_2]
 
     @staticmethod
-    def decode_value(datatype, encoded_str, extra):
+    def decode_value(datatype: P1DataType, encoded_str: bytes, extra: bytes):
         ret_val = P1Value(datatype)
-        split = encoded_str.find(b'*')
-        if split != -1:
-            try:
-                value = float(encoded_str[:split])
-            except ValueError:  # in some rare cases the string contains weird characters
-                value = None
-                logging.error(f"decodeValue: could not convert {encoded_str} to float")
-            unit = encoded_str[split + 1:]
-            ret_val.set_value(value, unit=unit)
-        else:
+        if datatype == P1DataType.TIMESTAMP:
             ret_val.set_value(encoded_str)
+        else:
+            if (split := encoded_str.find(b'*')) != -1:
+                try:
+                    value = float(encoded_str[:split])
+                except ValueError:  # in some rare cases the string contains weird characters
+                    value = None
+                    logging.error(f"decodeValue: could not convert {encoded_str} to float")
+                unit = encoded_str[split + 1:]
+                ret_val.set_value(value, unit=unit)
+            else:
+                try:
+                    value = int(encoded_str)
+                except ValueError:  # in some rare cases the string contains weird characters
+                    value = None
+                    logging.error(f"decodeValue: could not convert {encoded_str} to int")
+                ret_val.set_value(value, unit=None)
         if extra:
             ret_val.set_extra_timestamp(extra)
         return ret_val
 
-    def get_raw_lines(self):
+    def get_raw_lines(self) -> list[bytes]:
         return self._raw_lines
 
     def get_sampling_period(self, update: bool = False) -> float:

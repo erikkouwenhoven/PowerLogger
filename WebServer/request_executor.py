@@ -1,5 +1,5 @@
+from Utils.settings import Settings
 from Application.inquirer import Inquirer
-from Application.Models.shift_info import ShiftInfo
 from Application.Models.system_info import SystemInfo
 
 
@@ -15,11 +15,16 @@ class RequestExecutor:
         return self.inquirer.data_holder.data_store('real_time').data.dump()
 
     def get_data(self, args):
-        info_msg = "Usage: get_data?data_store_name=<>&signals=<,>"
-        if dict_args := self.convert_args(args):
+        info_msg = "Usage: get_data?data_store_name=<> or get_data?data_store_name=<>&signals=<,>"
+        if dict_args := self._convert_args(args):
             try:
                 data_store = self.inquirer.data_holder.data_store(dict_args['data_store_name'])
-                signals = dict_args['signals'].split(',')
+                try:
+                    signals = dict_args['signals'].split(',')
+                    if signals == '*':
+                        signals = None
+                except KeyError:
+                    signals = None
             except KeyError:
                 return info_msg
             return data_store.data.serialize(signals)
@@ -33,15 +38,17 @@ class RequestExecutor:
         return self.inquirer.data_holder.data_store(data_store_name).data_store_info()
 
     @staticmethod
-    def get_shift_info( *args):
-        shift_info = ShiftInfo()
-        return {"shift signal": shift_info.signal_to_shift, "shift in seconds": shift_info.shift_in_seconds}
+    def get_shift_info(*args):
+        return {"shift in seconds": Settings().get_shift_in_seconds()}
 
     def get_system_info(self, *args):
         return SystemInfo(self.inquirer).get_info()
 
     @staticmethod
-    def convert_args(args: str) -> dict[str, str] | None:
+    def _convert_args(args: str) -> dict[str, str] | None:
+        """
+        Convert argument string used in url such as a=1&b=2&c=3 to dict such as {a:1, b:2, c:3}
+        """
         res = {}
         for item in args.split('&'):
             key_value = item.split('=')

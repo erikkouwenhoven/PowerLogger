@@ -41,7 +41,11 @@ class Storage(ABC):
         pass
 
     @abstractmethod
-    def timedIndexes(self, from_index=None, to_index=None):
+    def modify(self, idx: int, element: str, value: float):
+        pass
+
+    @abstractmethod
+    def timed_indexes(self, from_index=None, to_index=None):
         pass
 
     @abstractmethod
@@ -61,23 +65,45 @@ class Storage(ABC):
         except AttributeError:
             return None
 
-    def serialize(self, signals: list[str] = None) -> dict:
-        result = {"timestamp": [self.get_data_item(idx).get_timestamp() for idx in self.timedIndexes()]}
+    def serialize(self, signals: list[str] | None = None) -> dict:
+        result = {"timestamp": [str(datetime.fromtimestamp(self.get_data_item(idx).get_timestamp())) for idx in self.timed_indexes()]}
         if signals is None:
             signals = self.data_item_spec.get_elements()
         for signal in signals:
-            result[signal] = [self.get_data_item(idx).get_value(signal) for idx in self.timedIndexes()]
+            result[signal] = [self.get_data_item(idx).get_value(signal) for idx in self.timed_indexes()]
         result["units"] = {str(data_type): self.data_item_spec.get_unit(data_type) for data_type in self.data_item_spec.get_elements()}
         return result
 
-    def addMeasurement(self, data_item: DataItem, no_zeros: bool = False, min_time_spacing=None):
+    def add_measurement(self, data_item: DataItem, no_zeros: bool = False, min_time_spacing=None):
         if no_zeros is True and data_item.is_zero() is True:
             return
         if (min_time_spacing is not None and
-                (datetime.fromtimestamp(data_item.timestamp) - datetime.fromtimestamp(
+                (datetime.fromtimestamp(data_item.get_timestamp()) - datetime.fromtimestamp(
                     self.last_time())).total_seconds() < min_time_spacing):
             return
         self.add_data_item(data_item)
+
+    def get_interpolated_value(self, at_timestamp: float, signal: str) -> float:
+        index = self.index_from_time(datetime.fromtimestamp(at_timestamp))
+        if (data_item := self.get_data_item(index)) and (curr_timestamp := data_item.get_timestamp()):
+            if curr_timestamp > at_timestamp:
+                index -= 1
+                next_data_item = data_item
+                next_timestamp = curr_timestamp
+                data_item = self.get_data_item(index)
+                curr_timestamp = data_item.get_timestamp()
+            else:
+                next_data_item = self.get_data_item(index + 1)
+                next_timestamp = next_data_item.get_timestamp()
+            if data_item and next_data_item and curr_timestamp and next_timestamp:
+                if curr_timestamp < at_timestamp < next_timestamp:
+                    float_part = ((at_timestamp - curr_timestamp) / (next_timestamp - curr_timestamp))
+                    if curr := data_item.get_value(signal):
+                        if next := next_data_item.get_value(signal):
+                            logging.debug(f"Interpol ({curr_timestamp}, {curr}), ({next_timestamp}, {next}) result ({at_timestamp}, {(1 - float_part) * curr + float_part * next})")
+                            return (1 - float_part) * curr + float_part * next
+                else:
+                    print(f"PANIC! interpolation at {at_timestamp}, brackets {curr_timestamp, next_timestamp}")
 
     def dump(self) -> list[str]:
         result = [f"Dump of circular buffer",
@@ -86,7 +112,7 @@ class Storage(ABC):
                   f"last_time_index = {self.last_index()} @ time {self.get_data_item(self.last_index()).get_timestamp_str()}",
                   f"Time range: from {self.get_data_item(self.min_time_index()).get_timestamp_str()} to"
                   f"{self.get_data_item(self.last_index()).get_timestamp_str()}"]
-        logging.debug(f"Timed indexes: {[ind for ind in self.timedIndexes()]}")
+        logging.debug(f"Timed indexes: {[ind for ind in self.timed_indexes()]}")
         result.append(f"Data: {self.serialize()}")
         return result
 
@@ -103,7 +129,7 @@ class CircularStorage(Storage, metaclass=ABCMeta):
 
     def __init__(self, num_elems: int, elems: list[str]):
         Storage.__init__(self, elems)
-        self.num_elems = num_elems
+        self.num_elems = num_elems  # het aantal elementen gealloceerd voor de data
         self.head = 0  # position in the data array of the next item
 
     def min_time_index(self) -> int:
@@ -117,7 +143,7 @@ class CircularStorage(Storage, metaclass=ABCMeta):
             return (self.head - offset - 1 + self.length()) % self.length()
 
     def add_data_item(self, data_item: DataItem):
-        self.data_item_spec.check_units(data_item.data_item_spec)
+        self.data_item_spec.take_over_units(data_item.data_item_spec)
         logging.debug(f"add_data_item: item={data_item}")
         if self.length() < self.num_elems:
             self.append(data_item)
@@ -125,7 +151,7 @@ class CircularStorage(Storage, metaclass=ABCMeta):
             self.insert(data_item, self.head)
         self.head = (self.head + 1) % self.num_elems
 
-    def timedIndexes(self, from_index=None, to_index=None):
+    def timed_indexes(self, from_index=None, to_index=None):
         """Geeft de indices op tijdsvolgorde terug door middel van een generator"""
         if from_index is None:
             from_index = self.min_time_index()
@@ -177,7 +203,7 @@ class CircularStorage(Storage, metaclass=ABCMeta):
                   f"last_time_index = {self.last_index()} @ time {self.get_data_item(self.last_index()).get_timestamp_str()}",
                   f"Time range: from {self.get_data_item(self.min_time_index()).get_timestamp_str()} to"
                   f"{self.get_data_item(self.last_index()).get_timestamp_str()}"]
-        logging.debug(f"Timed indexes: {[ind for ind in self.timedIndexes()]}")
+        logging.debug(f"Timed indexes: {[ind for ind in self.timed_indexes()]}")
         result.append(f"Data: {self.serialize()}")
         return result
 
@@ -201,11 +227,11 @@ class LinearStorage(Storage, metaclass=ABCMeta):
             return self.length() - offset - 1
 
     def add_data_item(self, data_item: DataItem):
-        self.data_item_spec.check_units(data_item.data_item_spec)
+        self.data_item_spec.take_over_units(data_item.data_item_spec)
         logging.debug(f"add_data_item: item={data_item}")
         self.append(data_item)
 
-    def timedIndexes(self, from_index=None, to_index=None):
+    def timed_indexes(self, from_index=None, to_index=None):
         """Geeft de indices op tijdsvolgorde terug door middel van een generator"""
         if from_index is None:
             from_index = self.min_time_index()
@@ -254,6 +280,10 @@ class MemStorage(Storage, metaclass=ABCMeta):
     def insert(self, data_item: DataItem, idx: int):
         self.data[idx] = data_item
 
+    def modify(self, idx: int, element: str, value: float):
+        self.data[idx].set_value(element, value)
+
+
 
 class PersistentStorage(Storage, metaclass=ABCMeta):
 
@@ -267,8 +297,8 @@ class PersistentStorage(Storage, metaclass=ABCMeta):
 
     def get_data_item(self, idx: int | None) -> DataItem:
         if idx is not None:
-            res = self.db_interface.get_data_items(self.table, idx, self.data_item_spec.get_elements())
-            return DataItem.from_array(res, self.data_item_spec)
+            res_array = self.db_interface.get_data_items(self.table, idx, self.data_item_spec.get_elements())
+            return DataItem.from_array(res_array, self.data_item_spec)
 
     def append(self, data_item: DataItem):
         array = data_item.to_array(self.data_item_spec)
@@ -278,14 +308,18 @@ class PersistentStorage(Storage, metaclass=ABCMeta):
         array = data_item.to_array(self.data_item_spec)
         self.db_interface.insert_data_item(self.table, idx, self.data_item_spec, array)
 
-    def serialize(self, signals: list[str] = None) -> dict:  # override as element-wise data retrieval would be too slow in database implementation
+    def modify(self, idx: int, element: str, value: float):
+        self.db_interface.modify_element(self.table, idx, element, value)
+
+    def serialize(self, signals: list[str] | None = None) -> dict:  # override as element-wise data retrieval would be too slow in database implementation
         all_data = self.db_interface.get_all_data(self.table)
-        res = {}
-        for item in all_data:
-            if item == "units" or item == "timestamp" or (signals is not None and item in signals):
-                res[item] = [all_data[item][idx] for idx in self.timedIndexes()]
-        res["units"] = {str(data_type): self.data_item_spec.get_unit(data_type) for data_type in self.data_item_spec.get_elements()}
-        return res
+        if signals is None:
+            signals = [signal for signal in all_data if signal not in ["timestamp", "units"]]
+        serialized = {"timestamp": [str(datetime.fromtimestamp(all_data["timestamp"][idx])) for idx in self.timed_indexes()]}
+        for signal in signals:
+            serialized[signal] = [all_data[signal][idx] for idx in self.timed_indexes()]
+        serialized["units"] = {str(data_type): self.data_item_spec.get_unit(data_type) for data_type in self.data_item_spec.get_elements()}
+        return serialized
 
 
 class CircularMemStorage(CircularStorage, MemStorage):
@@ -324,4 +358,4 @@ if __name__ == "__main__":
     req = start + timedelta(seconds=-14.2)
     res = buf.index_from_time(req)
     print(buf)
-    print(f"res = {res} buf = {buf.data[res].timestamp} req={datetime.timestamp(req)}")
+    print(f"res = {res} buf = {buf.data[res].get_timestamp()} req={datetime.timestamp(req)}")

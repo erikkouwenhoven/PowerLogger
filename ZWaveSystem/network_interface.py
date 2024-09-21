@@ -1,7 +1,9 @@
 import logging
 import datetime
-from openzwave.network import ZWaveNetwork, ZWaveException
+from openzwave.network import ZWaveNetwork
 from openzwave.option import ZWaveOption
+from openzwave.node import ZWaveNode
+from openzwave.value import ZWaveValue
 from pydispatch import dispatcher
 from Utils.settings import Settings
 
@@ -13,7 +15,7 @@ class NetworkInterface:
     - vangt events af en stuurt door
     - roept callback aan bij value update of change
     """
-    def __init__(self, value_received_cb):
+    def __init__(self, value_received_cb: callable((ZWaveNode, ZWaveValue))):
         """"
         valueReceivedCB(node, value) functie wordt aangeroepen als waarde binnenkomt
         """
@@ -43,39 +45,44 @@ class NetworkInterface:
         dispatcher.connect(self.network_ready, ZWaveNetwork.SIGNAL_NETWORK_READY)
         dispatcher.connect(self.network_awake, ZWaveNetwork.SIGNAL_NETWORK_AWAKED)
 
-    def network_started(self, network):
+    @staticmethod
+    def network_started(network: ZWaveNetwork):
         logging.info("***** Network has started")
         print("***** Network has started")
 
-    def network_failed(self, network):
+    @staticmethod
+    def network_failed(network: ZWaveNetwork):
         logging.info("***** Network has failed")
         print("***** Network has failed")
 
-    def network_ready(self, network):
+    @staticmethod
+    def network_ready(network: ZWaveNetwork):
         logging.info("***** Network is ready")
         print("***** Network is ready")
 
-    def network_awake(self, network):
+    @staticmethod
+    def network_awake(network: ZWaveNetwork):
         print("***** Network is awake")
         logging.info("***** Network is awake")
         dispatcher.connect(self.value_update, ZWaveNetwork.SIGNAL_VALUE)
         dispatcher.connect(self.value_changed, ZWaveNetwork.SIGNAL_VALUE_CHANGED)
         dispatcher.connect(self.node_event, ZWaveNetwork.SIGNAL_NODE_EVENT)
 
-    def value_update(self, network, node, value):
+    def value_update(self, network: ZWaveNetwork, node: ZWaveNode, value: ZWaveValue):
         logging.info("Hello from value : {}.".format(value))
         self.show_result(node, value)
         self.value_received_CB(node, value)
 
-    def value_changed(self, network, node, value):
+    def value_changed(self, network: ZWaveNetwork, node: ZWaveNode, value: ZWaveValue):
         logging.info("Hello from value CHANGE : {}.".format(value))
         self.show_result(node, value)
-        self.value_received_CB(node.node_id, value.label, value.data, value.units)
+        self.value_received_CB(node, value)
 
     def node_event(self, **kwargs):
         print("Hello from node event : {}.".format(kwargs))
 
-    def show_result(self, node, value):
+    @staticmethod
+    def show_result(node: ZWaveNode, value: ZWaveValue):
         S = f'{datetime.datetime.now()}: {node.node_id} {value.label} ({value.value_id}) {value.data} {value.units}'
         with open('output.txt', 'at') as file:
             file.write(S + '\n')

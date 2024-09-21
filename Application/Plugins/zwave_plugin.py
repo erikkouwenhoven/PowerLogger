@@ -26,7 +26,7 @@ class ZWavePlugin(Plugin):
     def post_sample_cb(self, z_wave_node: ZWaveNode, z_wave_value: ZWaveValue):
         data_item = self.zwave_to_data_item(z_wave_node, z_wave_value)
         logging.debug(f"zwaveSampleAcquired: {data_item}")
-        self.data_storage.addMeasurement(data_item, no_zeros=True, min_time_spacing=Settings().get_min_storage_time_diff_seconds())
+        self.data_storage.add_measurement(data_item, no_zeros=True, min_time_spacing=Settings().get_min_storage_time_diff_seconds())
 
     def zwave_to_data_item(self, z_wave_node: ZWaveNode, z_wave_value: ZWaveValue) -> DataItem:
         zwave_signal_name = self.zwave_interface.zwave_signal_name(z_wave_node, z_wave_value)

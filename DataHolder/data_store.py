@@ -8,13 +8,13 @@ class DataStore:
     """
 
     def __init__(self, name: str, persistency: Persistency, lifespan: LifeSpan, signals: list[str],
-                 sampling_period: int = None, buf_len: int = 0, db: str = None):
+                 sampling_time_minutes: int = None, buf_len: int = 0, db: str = None):
         self.name = name
         self.persistency = persistency
         self.lifespan = lifespan
         self.signals = signals
         self.buf_len = buf_len  # Alleen van toepassing bij circulaire persistency
-        self.sampling_period = sampling_period  # Alleen van toepassing bij afgeleide data
+        self.sampling_time_minutes = sampling_time_minutes  # Alleen van toepassing bij afgeleide data
         self.db = db  # Alleen in geval van persistency
         if self.persistency == Persistency.Persistent:
             assert self.db is not None

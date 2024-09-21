@@ -70,9 +70,9 @@ class Settings:
         return LifeSpan.Circular if self.config.get('DATASTORAGE', data_store_id + '_lifespan') == "circular" \
             else LifeSpan.Linear
 
-    def get_data_store_sampling_period(self, data_store_id) -> int | None:
+    def get_data_store_sampling_time_minutes(self, data_store_id) -> int | None:
         try:
-            return int(self.config.get('DATASTORAGE', data_store_id + '_sampling_period'))
+            return eval(self.config.get('DATASTORAGE', data_store_id + '_sampling_time_minutes'))
         except configparser.NoOptionError:
             return None
 
@@ -146,23 +146,8 @@ class Settings:
     def get_shift_in_seconds(self) -> float:
         return float(self.config.get('PROCESSING', 'shift_in_seconds'))
 
-    def get_signal_to_shift(self) -> str:
-        return self.config.get('PROCESSING', 'signal_to_shift')
-
-    def get_differential_source_signal(self) -> str:
-        return self.config.get('PROCESSING', 'differential_source_signal')
-
-    def get_filtered_data_store(self) -> str:
-        return self.config.get('PROCESSING', 'filtered_data_store')
-
-    def get_differential_dest_data_store(self) -> str:
-        return self.config.get('PROCESSING', 'differential_dest_data_store')
-
-    def get_differential_dest_signal(self) -> str:
-        return self.config.get('PROCESSING', 'differential_dest_signal')
-
-    def get_differential_dest_unit(self) -> str:
-        return self.config.get('PROCESSING', 'differential_dest_unit')
+    def get_unit(self, signal: str) -> str:
+        return self.config.get('PROCESSING', 'unit_' + signal)
 
     def get_config(self):
         if os.name == 'nt':

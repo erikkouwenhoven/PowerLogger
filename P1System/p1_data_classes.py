@@ -121,7 +121,10 @@ class P1Sample:
         for key in self.data:
             if key.name in signals and key != P1DataType.TIMESTAMP:
                 if value := self.data[key]:
-                    res[key.name] = value.unit.decode('utf-8')
+                    if value.unit is not None:
+                        res[key.name] = value.unit.decode('utf-8')
+                    else:
+                        res[key.name] = None
                 else:
                     res[key.name] = None
         return res
@@ -135,19 +138,20 @@ class P1Sample:
             signals = [p1_signal.name for p1_signal in p1_signals]
             data_item = DataItem(self.to_data_item_spec(signals), timestamp=datetime.timestamp(value.value))
             for element in data_item.data_item_spec.get_elements():
-                unit, idx = data_item.data_item_spec.get_element(element)
+                # unit, idx = data_item.data_item_spec.get_element(element)
                 if (value := self.get_value_from_name(element)) is not None:
-                    data_item.item_data[idx + 1] = value.value
+                    data_item.set_value(element, value.value)
+                    # data_item.item_data[idx + 1] = value.value
             return data_item
 
-    def extra_signal_to_data_item(self, extra_signal: str):
+    def extra_signal_to_data_item(self, extra_signal: str) -> DataItem:
         if extra_value := self.get_value_from_name(extra_signal):
             data_item = DataItem(self.to_data_item_spec([extra_signal]),
                                  timestamp=datetime.timestamp(extra_value.get_extra_timestamp()))
             data_item.set_value(str(extra_signal), self.get_value_from_name(extra_signal).value)
             return data_item
 
-    def __str__(self):
+    def __str__(self) -> str:
         if len(self.data) > 0:
             S = f"{len(self.data)} data items\n"
             for item in self.data:

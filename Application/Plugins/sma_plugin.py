@@ -19,5 +19,5 @@ class SMAPlugin(Plugin):
         if event_key == self.react_to_events[0]:
             data_item = DataItem(DataItemSpec({SMADataType.SOLAR.name: SMAInterface.c_POWER_UNIT}),
                                  timestamp=datetime.timestamp(datetime.now()))
-            data_item.set_value(SMADataType.SOLAR.name, self.sma_interface.getCurrentPower())
-            self.data_storage.addMeasurement(data_item)
+            data_item.set_value(SMADataType.SOLAR.name, self.sma_interface.get_current_power())
+            self.data_storage.add_measurement(data_item)

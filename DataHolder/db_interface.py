@@ -91,9 +91,14 @@ class DBInterface:
         cur = self.con.cursor()
         non_null_elements = [element for i, element in enumerate(data_item_spec.get_elements()) if array[i+1] is not None]
         cur.execute(f"INSERT INTO {table} (timestamp" +
-                    "".join([f", {element}" for element in non_null_elements]) +
+                    "".join([f", {item}" for item in non_null_elements]) +
                     ") VALUES (" + str(array[0]) +
                     "".join([f", {item}" for item in array[1:] if item is not None]) + ")")
+        self.con.commit()
+
+    def modify_element(self, table: str, idx: int, element: str, value: float):
+        cur = self.con.cursor()
+        cur.execute(f"UPDATE {table} SET {element}=? WHERE rowid=?", (value, idx+1))
         self.con.commit()
 
     def get_all_data(self, table: str) -> dict[str, list[float]]:

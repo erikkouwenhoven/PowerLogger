@@ -13,7 +13,7 @@ def time_delay_minutes(time_str: str) -> int | None:
     curr_time = datetime.now()
     if (delay := minute - curr_time.minute) < 0:
         delay += 60
-    if hour:
+    if hour is not None:
         if (delay_hours := hour - curr_time.hour) < 0:
             delay_hours += 24
         delay += delay_hours * 60
@@ -21,15 +21,15 @@ def time_delay_minutes(time_str: str) -> int | None:
 
 
 if __name__ == "__main__":
+    time_str = "00:10"
+    print(f"time_str: {time_str}. Dit is over: {time_delay_minutes(time_str)//60};{time_delay_minutes(time_str) % 60}")
     time_str = ":10"
-    print(f"time_str: {time_str}: {time_delay_minutes(time_str)}")
+    print(f"time_str: {time_str}. Dit is over: {time_delay_minutes(time_str)//60};{time_delay_minutes(time_str) % 60}")
     time_str = "1:10"
-    print(f"time_str: {time_str}: {time_delay_minutes(time_str)}")
+    print(f"time_str: {time_str}. Dit is over: {time_delay_minutes(time_str)//60};{time_delay_minutes(time_str) % 60}")
     time_str = ":54"
-    print(f"time_str: {time_str}: {time_delay_minutes(time_str)}")
+    print(f"time_str: {time_str}. Dit is over: {time_delay_minutes(time_str)//60};{time_delay_minutes(time_str) % 60}")
     time_str = "22:54"
-    print(f"time_str: {time_str}: {time_delay_minutes(time_str)}")
+    print(f"time_str: {time_str}. Dit is over: {time_delay_minutes(time_str)//60};{time_delay_minutes(time_str) % 60}")
     time_str = ":46"
-    print(f"time_str: {time_str}: {time_delay_minutes(time_str)}")
-    time_str = "18:46"
-    print(f"time_str: {time_str}: {time_delay_minutes(time_str)}")
+    print(f"time_str: {time_str}. Dit is over: {time_delay_minutes(time_str)//60};{time_delay_minutes(time_str) % 60}")

@@ -1,6 +1,6 @@
 import logging
 from enum import Enum, auto
-from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib import parse
 import json
 import threading

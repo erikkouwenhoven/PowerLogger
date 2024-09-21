@@ -6,16 +6,18 @@ from openzwave.value import ZWaveValue
 
 class ZWaveInterface:
 
-    def __init__(self, post_sample_cb):
+    def __init__(self, post_sample_cb: callable((ZWaveNode, ZWaveValue))):
         self.post_sample_CB = post_sample_cb
-        self.network_interface = NetworkInterface(self._value_received_cb)
+        self.network_interface = NetworkInterface(self._value_received_cb)  # als je dit een lokale var. leidt dit tot access violation
         self.subscriptions: dict[int, list[str]] | None = None  # registered node-valueIDs that are called back
 
     def register(self, subscriptions: dict[int, list[str]] | None):
         self.subscriptions = subscriptions
 
     def _value_received_cb(self, z_wave_node: ZWaveNode, z_wave_value: ZWaveValue):
-        logging.info(f'valueReceived callback from network: node={z_wave_node.node_id}, parent_id {z_wave_value.parent_id}, value={z_wave_value.data} {z_wave_value.units} ({z_wave_value.label}, {z_wave_value.value_id})')
+        logging.info(f'valueReceived callback from network: node={z_wave_node.node_id}, '
+                     f'parent_id {z_wave_value.parent_id}, value={z_wave_value.data} {z_wave_value.units} '
+                     f'({z_wave_value.label}, {z_wave_value.value_id})')
         if self.post_sample_CB:
             if z_wave_node.node_id in self.subscriptions:
                 if z_wave_value.label in self.subscriptions[z_wave_node.node_id]:

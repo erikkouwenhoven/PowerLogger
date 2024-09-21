@@ -10,48 +10,35 @@ class SerialReader:
     """
 
     def __init__(self, serial_settings: SerialSettings):
+        self.serial_settings = serial_settings
         ports = list(serial.tools.list_ports.comports())
         logging.info("Available ports:")
         for port in ports:
             logging.debug(f"  {port.name}")
-        self.port = self.init_port(serial_settings)
+        self.port: serial.Serial = self.init_port(serial_settings)
         self.stop_running = False  # for signalling to stop running
 
     @staticmethod
-    def init_port(serial_settings: SerialSettings):
+    def init_port(serial_settings: SerialSettings) -> serial.Serial | None:
         try:
             port = serial.Serial(
                 port=serial_settings.port,
-                baudrate=serial_settings.baudrate,
+                baudrate=serial_settings.baud_rate,
                 parity=serial_settings.parity,
-                stopbits=serial_settings.stopbits,
+                stopbits=serial_settings.stop_bits,
                 bytesize=serial_settings.bytesize
             )
             logging.info("Serial port connected")
             return port
-        except serial.SerialException:
-            logging.error("SerialException on initialization")
+        except serial.SerialException as e:
+            logging.error(f"SerialException on initialization: {e}")
 
-    # def runContinuously(self, callback):
-    #     if self.port:
-    #         self.stop_running = False
-    #         while self.stop_running is False:
-    #             try:
-    #                 line = self.port.readline()
-    #                 logging.debug(f"Serial data: {line}")
-    #                 print(f"Serial data: {line}")
-    #                 callback(line)
-    #             except serial.SerialException:
-    #                 logging.error("SerialException while reading")
-    #
-    def get_line(self):
+    def get_line(self) -> bytes | None:
         if self.port:
             try:
                 line = self.port.readline()
                 return line
-            except serial.SerialException:
-                logging.error("SerialException while reading")
-
-    # def stopRunning(self):
-    #     assert self.stop_running is False
-    #     self.stop_running = True
+            except serial.SerialException as e:
+                logging.error(f"SerialException while reading: {e}; retrying...")
+                self.port.close()
+                self.port = self.init_port(self.serial_settings)

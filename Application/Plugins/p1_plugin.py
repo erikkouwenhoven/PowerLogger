@@ -21,7 +21,7 @@ class P1Plugin(Plugin):
 
     def post_sample_cb(self, p1_sample: P1Sample):
         if p1_data_item := p1_sample.to_data_item(self.p1_interface.reqValues):
-            self.data_storage.addMeasurement(p1_data_item)
+            self.data_storage.add_measurement(p1_data_item)
         self.publisher.publish(self.outgoing_event, None)
 
     def start(self):

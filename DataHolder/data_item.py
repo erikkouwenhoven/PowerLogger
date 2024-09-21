@@ -17,7 +17,7 @@ class DataItemSpec:
 
     def __init__(self, types_units: dict[str, str | None]):
         """
-        types_units is a dict singal name: unit
+        types_units is a dict signal name: unit
         Self.elements is a dict with key the signal type, and value the unit and the index in the data array.
         """
         self.elements: dict[str, tuple[str, int]] = {k: (types_units[k], idx) for idx, k in enumerate(types_units)}
@@ -33,17 +33,24 @@ class DataItemSpec:
     def get_unit(self, data_type: str) -> str:
         return self.get_element(data_type)[0]
 
-    def check_units(self, other):
+    def get_element_index(self, data_type: str) -> int:
+        return self.get_element(data_type)[1]
+
+    def take_over_units(self, other: DataItemSpec):
+        """
+        Neemt de eenheden over van een andere DataItemSpec, indien niet aanwezig in self
+        """
         for data_type in self.elements:
-            unit, idx = self.elements[data_type]
             # take over the unit from the data
-            if (other_value := other.get_element(data_type)) is not None:
-                other_unit, other_idx = other_value
-                if other_unit:
-                    if unit is None:
-                        self.elements[data_type] = other_unit, idx  # take over the unit, maintain the index
-                    else:
-                        assert unit == other_unit
+            if data_type in other.elements:
+                if (other_value := other.get_element(data_type)) is not None:
+                    other_unit, other_idx = other_value
+                    unit, idx = self.elements[data_type]
+                    if other_unit:
+                        if unit is None:
+                            self.elements[data_type] = other_unit, idx  # take over the unit, maintain the index
+                        else:
+                            assert unit == other_unit
 
     def get_elements(self) -> list[str]:
         return [data_type for data_type in self.elements]
@@ -69,8 +76,8 @@ class DataItem:
 
     def __init__(self, data_item_spec: DataItemSpec, timestamp: float = None):
         self.data_item_spec: DataItemSpec = data_item_spec
-        self.timestamp: float | None = timestamp
         self.item_data: list[float | None] = [None] * (len(data_item_spec.get_elements()) + 1)
+        self.item_data[0] = timestamp
 
     def get_value(self, element: str) -> float:
         unit, idx = self.data_item_spec.get_element(element)
@@ -96,11 +103,11 @@ class DataItem:
             self.add_value(element, other.get_value(element), other.data_item_spec.get_unit(element))
 
     def get_timestamp(self) -> float:
-        return self.timestamp
+        return self.item_data[0]
 
     def get_timestamp_str(self) -> str:
-        if self.timestamp is not None:
-            return datetime.fromtimestamp(self.timestamp).strftime("%d-%m-%Y, %H:%M:%S")
+        if self.item_data[0] is not None:
+            return datetime.fromtimestamp(self.item_data[0]).strftime("%d-%m-%Y, %H:%M:%S")
 
     def is_zero(self) -> bool:
         return all([self.item_data[idx] == 0.0 for idx in range(1, len(self.item_data))])
@@ -116,7 +123,7 @@ class DataItem:
 
     def to_array(self, data_item_spec: DataItemSpec) -> list[float | None]:
         array = [None] * (len(data_item_spec.get_elements()) + 1)
-        array[0] = self.timestamp
+        array[0] = self.item_data[0]
         for i, element in enumerate(data_item_spec.get_elements()):
             unit, idx = data_item_spec.get_element(element)
             array[i + 1] = self.item_data[idx + 1]

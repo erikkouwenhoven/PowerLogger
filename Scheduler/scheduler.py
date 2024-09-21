@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 import logging
 from apscheduler.schedulers.background import BackgroundScheduler
 from Utils.settings import Settings
+from Application.Models.operation import Operation
 from Application.processor import Processor
 
 
@@ -19,10 +20,10 @@ class Scheduler:
         job_names = Settings().scheduled_jobs()
         for job_name in job_names:
             sched_job = ScheduledJob(job_name)
-            if self.processor.check_job_parameters(sources=sched_job.sources,
-                                                   dest=sched_job.destination,
-                                                   operation=sched_job.operation,
-                                                   operands=sched_job.operand) is True:
+            if self.check_job_parameters(sources=sched_job.sources,
+                                         dest=sched_job.destination,
+                                         operation=sched_job.operation,
+                                         operands=sched_job.operand) is True:
                 kwargs = {'sources': sched_job.sources,
                           'dest': sched_job.destination,
                           'operation': sched_job.operation,
@@ -46,6 +47,40 @@ class Scheduler:
                                               dest=kwargs['dest'],
                                               operation=kwargs['operation'],
                                               operands=kwargs['operand'])
+
+    def check_job_parameters(self, sources: list[str], dest: str, operation: Operation, operands: list[str]) -> bool:
+        for data_store in sources + [dest]:
+            if self.processor.data_holder.data_store(data_store) is None:
+                logging.error(f"check_job_parameters: Data store {data_store} is unknown")
+                return False
+
+        source_signals = [signal for source in sources for signal in self.processor.data_holder.data_store(source).signals]
+        dest_signals = [signal for signal in self.processor.data_holder.data_store(dest).signals]
+        if all([dest_signal in source_signals for dest_signal in dest_signals]) is False and operation is not Operation.DIFF:
+            logging.error(f"check_job_parameters: Not all destination signals ({dest_signals}) in source signals ({source_signals})")
+            return False
+
+        if operands == ["*"]:
+            operands = source_signals
+        if all([operand in source_signals for operand in operands]) is False:
+            logging.error(f"check_job_parameters: Not all operands ({operands}) in source signals ({source_signals})")
+            return False
+
+        if (len(dest_signals) == 1 or all([operand in dest_signals for operand in operands])) is False:
+            logging.error(f"check_job_parameters: The result signals of the operation are ambiguous: destination: {dest_signals}, operands: {operands}")
+            return False
+
+        if operation != Operation.AVG and len(operands) != 1:
+            logging.error(f"check_job_parameters: The operation {operation} requires exactly one operand, instead {len(operands)} are found")
+            return False
+
+        operand_data_stores = list(filter(lambda ds: any(operand in ds.signals for operand in operands),
+                                          [self.processor.data_holder.data_store(src) for src in sources]))
+        if len(operand_data_stores) != 1:
+            logging.error(f"check_job_parameters: The operands {operands} should be all in the same data store")
+            return False
+
+        return True
 
 
 class ScheduledJob:

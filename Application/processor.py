@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime, timedelta
-import copy
 from Application.Models.operation import Operation
 from DataHolder.data_item import DataItemSpec, DataItem
 from DataHolder.data_holder import DataHolder
@@ -17,39 +16,11 @@ class Processor:
     def __init__(self, data_holder: DataHolder):
         self.data_holder = data_holder
 
-    def check_job_parameters(self, sources: list[str], dest: str, operation: Operation, operands: list[str]) -> bool:
-        for data_store in sources + [dest]:
-            if self.data_holder.data_store(data_store) is None:
-                logging.error(f"check_job_parameters: Data store {data_store} is unknown")
-                return False
-
-        source_signals = [signal for source in sources for signal in self.data_holder.data_store(source).signals]
-        dest_signals = [signal for signal in self.data_holder.data_store(dest).signals]
-        if all([dest_signal in source_signals for dest_signal in dest_signals]) is False:
-            logging.error(f"check_job_parameters: Not all destination signals ({dest_signals}) in source signals ({source_signals})")
-            return False
-
-        if operands == ["*"]:
-            operands = source_signals
-        if all([operand in source_signals for operand in operands]) is False:
-            logging.error(f"check_job_parameters: Not all operands ({operands}) in source signals ({source_signals})")
-            return False
-
-        if len(dest_signals) == 1 or all([operand in dest_signals for operand in operands]) is False:
-            logging.error(f"check_job_parameters: The result signals of the operation are ambiguous: destination: {dest_signals}, operands: {operands}")
-            return False
-
-        if operation != Operation.AVG and len(operands) != 1:
-            logging.error(f"check_job_parameters: The operation {operation} requires exactly one operand, instead {len(operands)} are found")
-            return False
-
-        return True
-
     def process_derived_signal(self, sources: list[str], dest: str, operation: Operation, operands: list[str]):
         """
         De signalen van de bron data source worden in bewerkte vorm overgezet naar de destination data source. De tijd
         range waarover dat gebeurt wordt bepaald door wat er al aanwezig is in zowel source als destination. De tijdrange
-        die nog ontbreekt in de destination wordt aangevuld tot die in de destionation.
+        die nog ontbreekt in de destination wordt aangevuld tot die in de destination.
 
         Is er sprake van meerdere sources dan worden deze gemerged, waarbij de tijdstippen van de eerste source worden
         toegepast op de andere sources door middel van interpolatie.
@@ -67,6 +38,7 @@ class Processor:
         DIFF: maak eem mieuw DataItem
         AVG: maak een nieuw DataItem
         """
+        logging.info(f"Call process_derived_signal with sources={sources}, dest={dest}, operation={operation}, operands={operands}")
         source_signals = [signal for source in sources for signal in self.data_holder.data_store(source).signals]
         dest_signals = [signal for signal in self.data_holder.data_store(dest).signals]
         assert all([dest_signal in source_signals for dest_signal in dest_signals])
@@ -77,53 +49,72 @@ class Processor:
         if operation != Operation.AVG:
             assert len(operands) == 1
 
-        dest_end_time = self.data_holder.get_end_time(dest)
+        if (dest_end_time := self.data_holder.get_end_time(dest)) is None:
+            dest_end_time = datetime.now()
+        logging.debug(f"dest_end_time = {dest_end_time}")
         try:
             src_end_time = min([self.data_holder.get_end_time(source) for source in sources
                                 if self.data_holder.get_end_time(source) is not None])
         except ValueError:
             src_end_time = None
 
-        operand_data_stores = list(filter(lambda data_store: any(operand in data_store.signals for operand in operands),
-                                          [self.data_holder.data_store(src) for src in sources]))
-        assert len(operand_data_stores) == 1
-        operand_data_store: DataStore = operand_data_stores[0]
+        operand_data_store: DataStore = self.data_holder.data_store(dest)
 
         if len(sources) > 1:  # Merge
             ref_storage = self.data_holder.data_store(sources[0]).data
-            i_updates = ref_storage.timedIndexes(ref_storage.index_from_time(dest_end_time), None)
+            merged_data_item_spec = self.data_holder.data_store(dest).data.data_item_spec
+            for src in sources:
+                merged_data_item_spec.take_over_units(self.data_holder.data_store(src).data.data_item_spec)
+            i_updates = ref_storage.timed_indexes(ref_storage.index_from_time(dest_end_time), None)
             for i_update in i_updates:
-                data_item = copy.deepcopy(ref_storage.get_data_item(i_update))
-                for src in sources[1:]:
-                    src_index = self.data_holder.data_store(src).data.index_from_time(datetime.fromtimestamp(data_item.get_timestamp()))
-                    data_item.merge(self.data_holder.data_store(src).data.get_data_item(src_index))
-                self.data_holder.data_store(dest).data.addMeasurement(data_item)
+                time_stamp = ref_storage.get_data_item(i_update).get_timestamp()
+                merged_data_item = DataItem(merged_data_item_spec, time_stamp)
+                for item in merged_data_item.data_item_spec.get_elements():
+                    for src in sources:
+                        if item in self.data_holder.data_store(src).data.data_item_spec.get_elements():
+                            if src != sources[0]:
+                                val = self.data_holder.data_store(src).data.get_interpolated_value(time_stamp, item)
+                            else:  # Hier geldt de timestamp van de ref_storage
+                                src_data_item = self.data_holder.data_store(src).data.get_data_item(i_update)
+                                val = src_data_item.get_value(item)
+                            merged_data_item.set_value(item, val)
+                operand_data_store.data.add_measurement(merged_data_item)
+                logging.info(f"Merged {merged_data_item}")
 
-        # Uitvoeren van operatie in-place
+        # Uitvoeren van operatie door modificatie van bestaand signaal
         if operation in (Operation.SHIFT, ):
-            i_updates = operand_data_store.data.timedIndexes(operand_data_store.data.index_from_time(dest_end_time), None)
+            assert len(operands) == 1
+            shift_signal = operands[0]
+            src_data_stores = list(filter(lambda ds: shift_signal in ds.signals, [self.data_holder.data_store(src) for src in sources]))
+            assert len(src_data_stores) == 1
+            src_data_store = src_data_stores[0]
+            i_updates = operand_data_store.data.timed_indexes(operand_data_store.data.index_from_time(dest_end_time), None)
             for i_update in i_updates:
-                data_item = operand_data_store.data.get_data_item(i_update)
-                at_time = datetime.fromtimestamp(data_item.get_timestamp())
                 if operation == Operation.SHIFT:
-                    shifted = self.shift(operand_data_store.data, operands[0], at_time, -1)
-                    data_item.set_value(operands[0], shifted)
+                    if data_item := operand_data_store.data.get_data_item(i_update):
+                        timestamp = data_item.get_timestamp()
+                        shifted = self.shift(src_data_store.data, shift_signal, timestamp, Settings().get_shift_in_seconds())
+                        operand_data_store.data.modify(i_update, shift_signal, shifted)
+                        logging.info(f"Modified signal {shift_signal} at {datetime.fromtimestamp(timestamp)} to value {shifted}")
 
         # Uitvoeren van operatie met aanmaak nieuw DataItem
-        if operation in (Operation.AVG, Operation.DIFF):
-            assert (period := self.data_holder.data_store(dest).sampling_period)
+        elif operation in (Operation.AVG, Operation.DIFF):
+            assert (period := self.data_holder.data_store(dest).sampling_time_minutes)
             assert len(sources) == 1
             ref_storage = self.data_holder.data_store(sources[0]).data
-            at_time = dest_end_time + timedelta(seconds=period)
+            at_time = dest_end_time + timedelta(minutes=period)
             assert at_time <= src_end_time
             if operation == Operation.AVG:
                 result_data_item = self.average(ref_storage, dest_end_time, at_time, operands)
             elif operation == Operation.DIFF:
-                data_item_spec = DataItemSpec({Settings().get_differential_dest_signal(): Settings().get_differential_dest_unit()})
-                result_data_item = self.differentiate(ref_storage, operands[0], at_time, timedelta(seconds=-period), data_item_spec)
+                assert len(operands) == 1
+                operand = operands[0]
+                assert operand in source_signals
+                assert len(dest_signals) == 1
+                result_data_item = self.differentiate(ref_storage, operand, dest_signals[0], at_time, timedelta(minutes=-period))
             else:
                 raise NotImplementedError
-            self.data_holder.data_store(dest).data.addMeasurement(result_data_item)
+            operand_data_store.data.add_measurement(result_data_item)
 
     @staticmethod
     def average(storage: Storage, from_time: datetime, to_time: datetime, selected_signals: list[str]) -> DataItem:
@@ -133,7 +124,7 @@ class Processor:
         for signal in selected_signals:
             cum_sum = 0.0
             cum_count = 0
-            for idx in storage.timedIndexes(storage.index_from_time(from_time), storage.index_from_time(to_time)):
+            for idx in storage.timed_indexes(storage.index_from_time(from_time), storage.index_from_time(to_time)):
                 if (value := storage.get_data_item(idx).get_value(signal)) is not None:
                     cum_sum += value
                     cum_count += 1
@@ -144,7 +135,7 @@ class Processor:
         return sample
 
     @staticmethod
-    def differentiate(storage: Storage, signal: str, at_time: datetime, diff_time: timedelta, data_item_spec: DataItemSpec) -> DataItem:
+    def differentiate(storage: Storage, signal: str, diff_signal: str, at_time: datetime, diff_time: timedelta) -> DataItem:
         """
         Geeft het verschil van een signaal op een gegeven moment en een delta tijd daarvoor
         :param storage: Storage die de data bevat
@@ -154,7 +145,7 @@ class Processor:
         :param diff_time: Het tijdsverschil
         :return: Het signaalverschil
         """
-        sample = DataItem(data_item_spec, timestamp=at_time.timestamp())
+        sample = DataItem(DataItemSpec({signal: Settings().get_unit(diff_signal)}), timestamp=at_time.timestamp())
         if curr_item := storage.get_data_item(storage.index_from_time(at_time)):
             curr = curr_item.get_value(signal)
         else:
@@ -169,26 +160,13 @@ class Processor:
         return sample
 
     @staticmethod
-    def shift(storage: Storage, signal: str, at_time: datetime, shift_in_seconds: float) -> float:
+    def shift(storage: Storage, signal: str, at_timestamp: float, shift_in_seconds: float) -> float:
         """
         Verschuift het signaal in de tijd t.o.v. het tijdstip in het data-item
         :param storage: Storage die de data bevat
         :param signal: Naam van het signaal
-        :param at_time: Het moment van bepaling van het signaal
+        :param at_timestamp: Het moment van bepaling van het signaal
         :param shift_in_seconds: verschuiving in seconden
         :return: De signaalwaarde op het verschoven tijdstip
         """
-        if data_item := storage.get_data_item(storage.index_from_time(at_time)):
-            assert signal in data_item.data_item_spec.get_elements()
-            goal_timestamp = data_item.timestamp + shift_in_seconds
-            index = storage.index_from_time(datetime.fromtimestamp(goal_timestamp))
-            if storage.get_data_item(index).get_timestamp() > goal_timestamp:
-                index -= 1
-            if storage.get_data_item(index).get_timestamp() < goal_timestamp < storage.get_data_item(index + 1).get_timestamp():
-                float_part = ((goal_timestamp - storage.get_data_item(index).get_timestamp()) /
-                              (storage.get_data_item(index + 1).get_timestamp() - storage.get_data_item(index).get_timestamp()))
-                interp = ((1 - float_part) * storage.get_data_item(index).get_value(signal) +
-                          float_part * storage.get_data_item(index + 1).get_value(signal))
-                return interp
-            else:
-                print(f"PANIC! interpolation at {goal_timestamp}, brackets {storage.get_data_item(index).get_timestamp(), storage.get_data_item(index + 1).get_timestamp()}")
+        return storage.get_interpolated_value(at_timestamp + shift_in_seconds, signal)
