@@ -45,7 +45,7 @@ class Storage(ABC):
         pass
 
     @abstractmethod
-    def timed_indexes(self, from_index=None, to_index=None):
+    def timed_indexes(self, from_index=None, to_index=None, skip_first=False):
         pass
 
     @abstractmethod
@@ -100,7 +100,7 @@ class Storage(ABC):
                     float_part = ((at_timestamp - curr_timestamp) / (next_timestamp - curr_timestamp))
                     if curr := data_item.get_value(signal):
                         if next := next_data_item.get_value(signal):
-                            logging.debug(f"Interpol ({curr_timestamp}, {curr}), ({next_timestamp}, {next}) result ({at_timestamp}, {(1 - float_part) * curr + float_part * next})")
+                            # logging.debug(f"Interpol ({curr_timestamp}, {curr}), ({next_timestamp}, {next}) result ({at_timestamp}, {(1 - float_part) * curr + float_part * next})")
                             return (1 - float_part) * curr + float_part * next
                 else:
                     print(f"PANIC! interpolation at {at_timestamp}, brackets {curr_timestamp, next_timestamp}")
@@ -151,10 +151,12 @@ class CircularStorage(Storage, metaclass=ABCMeta):
             self.insert(data_item, self.head)
         self.head = (self.head + 1) % self.num_elems
 
-    def timed_indexes(self, from_index=None, to_index=None):
+    def timed_indexes(self, from_index=None, to_index=None, skip_first=False):
         """Geeft de indices op tijdsvolgorde terug door middel van een generator"""
         if from_index is None:
             from_index = self.min_time_index()
+        if skip_first is True:
+            from_index += 1
         if to_index is None:
             to_index = self.last_index()
         if from_index is not None and to_index is not None:
@@ -231,13 +233,13 @@ class LinearStorage(Storage, metaclass=ABCMeta):
         logging.debug(f"add_data_item: item={data_item}")
         self.append(data_item)
 
-    def timed_indexes(self, from_index=None, to_index=None):
+    def timed_indexes(self, from_index=None, to_index=None, skip_first=False):
         """Geeft de indices op tijdsvolgorde terug door middel van een generator"""
         if from_index is None:
             from_index = self.min_time_index()
         if to_index is None:
             to_index = self.last_index()
-        for idx in range(from_index, to_index + 1):
+        for idx in range(from_index if skip_first is False else from_index + 1, to_index + 1):
             yield idx
 
     def index_from_time(self, time: datetime) -> int | None:
