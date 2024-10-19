@@ -1,3 +1,4 @@
+from typing import Dict, Any, Union
 from Utils.settings import Settings
 from Application.inquirer import Inquirer
 from Application.Models.system_info import SystemInfo
@@ -34,7 +35,7 @@ class RequestExecutor:
     def get_data_stores(self, *args):
         return {"data_stores": self.inquirer.data_holder.get_data_stores()}
 
-    def get_data_store_info(self, data_store_name: str) -> dict[str, any]:
+    def get_data_store_info(self, data_store_name: str) -> Dict[str, Any]:
         return self.inquirer.data_holder.data_store(data_store_name).data_store_info()
 
     @staticmethod
@@ -45,7 +46,7 @@ class RequestExecutor:
         return SystemInfo(self.inquirer).get_info()
 
     @staticmethod
-    def _convert_args(args: str) -> dict[str, str] | None:
+    def _convert_args(args: str) -> Union[Dict[str, str], None]:
         """
         Convert argument string used in url such as a=1&b=2&c=3 to dict such as {a:1, b:2, c:3}
         """

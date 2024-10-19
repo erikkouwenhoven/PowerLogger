@@ -1,3 +1,4 @@
+from typing import List, Union
 import logging
 from datetime import datetime, timedelta
 from Application.Models.operation import Operation
@@ -16,7 +17,7 @@ class Processor:
     def __init__(self, data_holder: DataHolder):
         self.data_holder = data_holder
 
-    def process_derived_signal(self, sources: list[str], dest: str, operation: Operation, operands: list[str]):
+    def process_derived_signal(self, sources: List[str], dest: str, operation: Operation, operands: List[str]):
         """
         De signalen van de bron data source worden in bewerkte vorm overgezet naar de destination data source. De tijd
         range waarover dat gebeurt wordt bepaald door wat er al aanwezig is in zowel source als destination. De tijdrange
@@ -49,8 +50,7 @@ class Processor:
         if operation != Operation.AVG:
             assert len(operands) == 1
 
-        if (dest_end_time := self.data_holder.get_end_time(dest)) is None:
-            dest_end_time = datetime.now()
+        dest_end_time = self.data_holder.get_end_time(dest)
         logging.debug(f"dest_end_time = {dest_end_time}")
         try:
             src_end_time = min([self.data_holder.get_end_time(source) for source in sources
@@ -103,31 +103,30 @@ class Processor:
             assert (period := self.data_holder.data_store(dest).sampling_time_minutes)
             assert len(sources) == 1
             ref_storage = self.data_holder.data_store(sources[0]).data
-            at_time = dest_end_time + timedelta(minutes=period)
-            if not (at_time <= src_end_time):
-                if operation in (Operation.AVG, Operation.SUM):
-                    result_data_item = self.average_sum(ref_storage, dest_end_time, at_time, operands, avg=True)
-                elif operation == Operation.DIFF:
-                    assert len(operands) == 1
-                    operand = operands[0]
-                    assert operand in source_signals
-                    assert len(dest_signals) == 1
-                    result_data_item = self.differentiate(ref_storage, operand, dest_signals[0], at_time, timedelta(minutes=period))
-                elif operation == Operation.VALUE:
-                    storage = self.data_holder.data_store(sources[0]).data
-                    data_item_spec = DataItemSpec({signal: storage.data_item_spec.get_unit(signal) for signal in operands})
-                    src_data_item = storage.get_data_item(storage.last_index())
-                    result_data_item = DataItem(data_item_spec, src_data_item.get_timestamp())
-                    for signal in operands:
-                        result_data_item.set_value(signal, src_data_item.get_value(signal))
-                else:
-                    raise NotImplementedError
-                operand_data_store.data.add_measurement(result_data_item)
+            at_time = dest_end_time if dest_end_time is not None else datetime.now()
+            if operation in (Operation.AVG, Operation.SUM):
+                result_data_item = self.average_sum(ref_storage, at_time, at_time + timedelta(minutes=period), operands, avg=True)
+            elif operation == Operation.DIFF:
+                assert len(operands) == 1
+                operand = operands[0]
+                assert operand in source_signals
+                assert len(dest_signals) == 1
+                result_data_item = self.differentiate(ref_storage, operand, dest_signals[0], at_time, timedelta(minutes=period))
+            elif operation == Operation.VALUE:
+                storage = self.data_holder.data_store(sources[0]).data
+                data_item_spec = DataItemSpec({signal: storage.data_item_spec.get_unit(signal) for signal in operands})
+                src_data_item = storage.get_data_item(storage.last_index())
+                result_data_item = DataItem(data_item_spec, src_data_item.get_timestamp())
+                for signal in operands:
+                    result_data_item.set_value(signal, src_data_item.get_value(signal))
             else:
-                logging.error(f"NIET GELUKT dest_end_time={dest_end_time}, src_end_time={src_end_time}, at_time={at_time}")
+                raise NotImplementedError
+            logging.debug(f"operation = {operation}; result = {result_data_item}")
+            if result_data_item:
+                operand_data_store.data.add_measurement(result_data_item)
 
     @staticmethod
-    def average_sum(storage: Storage, from_time: datetime, to_time: datetime, selected_signals: list[str], avg=True) -> DataItem:
+    def average_sum(storage: Storage, from_time: datetime, to_time: datetime, selected_signals: List[str], avg=True) -> DataItem:
         data_item_spec = DataItemSpec({signal: storage.data_item_spec.get_unit(signal) for signal in selected_signals})
         timestamp = 0.5 * (datetime.timestamp(from_time) + datetime.timestamp(to_time)) if avg is True else datetime.timestamp(to_time)
         sample = DataItem(data_item_spec, timestamp=timestamp)
@@ -146,7 +145,7 @@ class Processor:
         return sample
 
     @staticmethod
-    def differentiate(storage: Storage, signal: str, diff_signal: str, at_time: datetime, diff_time: timedelta) -> DataItem:
+    def differentiate(storage: Storage, signal: str, diff_signal: str, at_time: datetime, diff_time: timedelta) -> Union[DataItem, None]:
         """
         Geeft het verschil van een signaal op een gegeven moment en een delta tijd daarvoor
         :param storage: Storage die de data bevat
@@ -154,26 +153,24 @@ class Processor:
         :param diff_signal: Naam van het resultaatsignaal
         :param at_time: Het moment van bepaling van het signaal
         :param diff_time: Het tijdsverschil
-        :return: Het signaalverschil
+        :return: Het dataitem met signaalverschil, of None
         """
         logging.debug(f"differentiate: at_time = {at_time}")
-        logging.debug(f"differentiate: at_time - diff_time = {at_time - diff_time}")
-        sample = DataItem(DataItemSpec({diff_signal: Settings().get_unit(diff_signal)}), timestamp=at_time.timestamp())
+        logging.debug(f"differentiate: at_time + diff_time = {at_time + diff_time}")
         if curr_item := storage.get_data_item(storage.index_from_time(at_time)):
             curr = curr_item.get_value(signal)
-            logging.debug(f"differentiate: curr = {curr}")
+            logging.debug(f"differentiate: time = {at_time} index = {storage.index_from_time(at_time)} curr = {curr}")
         else:
-            sample.set_value(signal, 0.0)
             logging.debug(f"differentiate: could not assess curr")
-            return sample
-        if prev_item := storage.get_data_item(storage.index_from_time(at_time - diff_time)):
-            prev = prev_item.get_value(signal)
-            logging.debug(f"differentiate: prev = {prev}")
+            return None
+        if new_item := storage.get_data_item(storage.index_from_time(at_time + diff_time)):
+            new = new_item.get_value(signal)
+            logging.debug(f"differentiate: time = {at_time + diff_time} index = {storage.index_from_time(at_time + diff_time)} new = {new}")
         else:
-            sample.set_value(signal, 0.0)
-            logging.debug(f"differentiate: could not assess prev")
-            return sample
-        sample.set_value(diff_signal, curr - prev)
+            logging.debug(f"differentiate: could not assess new")
+            return None
+        sample = DataItem(DataItemSpec({diff_signal: Settings().get_unit(diff_signal)}), timestamp=at_time.timestamp())
+        sample.set_value(diff_signal, new - curr)
         return sample
 
     @staticmethod

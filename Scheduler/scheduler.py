@@ -1,6 +1,8 @@
+from typing import List
 from datetime import datetime, timedelta
 import logging
 from apscheduler.schedulers.background import BackgroundScheduler
+from enum import Enum, auto
 from Utils.settings import Settings
 from Application.Models.operation import Operation
 from Application.processor import Processor
@@ -48,7 +50,7 @@ class Scheduler:
                                               operation=kwargs['operation'],
                                               operands=kwargs['operand'])
 
-    def check_job_parameters(self, sources: list[str], dest: str, operation: Operation, operands: list[str]) -> bool:
+    def check_job_parameters(self, sources: List[str], dest: str, operation: Operation, operands: List[str]) -> bool:
         for data_store in sources + [dest]:
             if self.processor.data_holder.data_store(data_store) is None:
                 logging.error(f"check_job_parameters: Data store {data_store} is unknown")
@@ -84,11 +86,29 @@ class Scheduler:
 
 
 class ScheduledJob:
+    """
+    Houdt de gegevens van een scheduled job bij.
+    Mogelijke trigger is: PERIODIC of CRON.
+    Bij PERIODIC hoort interval_minutes; bij CRON hoort Periodicity.
+    """
+
+    class JobTrigger(Enum):
+        PERIODIC = auto()
+        CRON = auto()
+
+    class CronPeriodicity(Enum):
+        MONTHLY = auto()
+        YEARLY = auto()
 
     def __init__(self, job_name: str):
         self.job_name = job_name
         self.sources = Settings().sched_job_sources(job_name)
         self.destination = Settings().sched_job_destination(job_name)
         self.interval_minutes = Settings().interval_minutes(job_name)
+        if self.interval_minutes:
+            self.job_trigger = self.JobTrigger.PERIODIC
+        else:
+            self.job_trigger = self.JobTrigger.CRON
+            self.periodicity = Settings().periodicity(job_name)
         self.delay_minutes = Settings().start_at_time(job_name)
         self.operation, self.operand = Settings().sched_job_operation(job_name)

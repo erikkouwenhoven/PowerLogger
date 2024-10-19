@@ -1,4 +1,5 @@
 import logging
+from typing import Union
 import serial
 import serial.tools.list_ports
 from P1System.serial_settings import SerialSettings
@@ -19,7 +20,7 @@ class SerialReader:
         self.stop_running = False  # for signalling to stop running
 
     @staticmethod
-    def init_port(serial_settings: SerialSettings) -> serial.Serial | None:
+    def init_port(serial_settings: SerialSettings) -> Union[serial.Serial, None]:
         try:
             port = serial.Serial(
                 port=serial_settings.port,
@@ -33,7 +34,7 @@ class SerialReader:
         except serial.SerialException as e:
             logging.error(f"SerialException on initialization: {e}")
 
-    def get_line(self) -> bytes | None:
+    def get_line(self) -> Union[bytes, None]:
         if self.port:
             try:
                 line = self.port.readline()

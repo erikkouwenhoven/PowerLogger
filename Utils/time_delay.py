@@ -1,7 +1,8 @@
 from datetime import datetime
+from typing import Union
 
 
-def time_delay_minutes(time_str: str) -> int | None:
+def time_delay_minutes(time_str: str) -> Union[int, None]:
     """
     Geeft de delay in minuten tot de gegeven tijd is bereikt. De tijd is gespecificeerd in de vorm van hh:mm.
     Het deel hh is optioneel, indien weggelaten wordt er voor het eerstvolgende uur een delay bepaald.

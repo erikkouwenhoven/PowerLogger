@@ -1,5 +1,5 @@
 from enum import Enum, auto
-from typing import Union
+from typing import Union, List, Dict
 from datetime import datetime
 from DataHolder.data_item import DataItemSpec, DataItem
 
@@ -42,9 +42,9 @@ class P1Value:
     """
     def __init__(self, datatype: P1DataType):
         self.dataType = datatype
-        self.value: Union[float, datetime] | None = None
-        self.unit: bytes | None = None
-        self.extra_timestamp: datetime | None = None
+        self.value: Union[Union[float, datetime], None] = None
+        self.unit: Union[bytes, None] = None
+        self.extra_timestamp: Union[datetime, None] = None
 
     def set_value(self, value: Union[float, bytes], unit: bytes = None):
         if value is not None:
@@ -65,7 +65,7 @@ class P1Value:
         return self.extra_timestamp
 
     @staticmethod
-    def decode_time(value: bytes) -> datetime | None:
+    def decode_time(value: bytes) -> Union[datetime, None]:
         try:
             return datetime.strptime(value.decode()[:12], "%y%m%d%H%M%S")
         except ValueError:
@@ -76,8 +76,8 @@ class P1Sample:
     """
         Contains one sample, i.e. a dict of Values
     """
-    def __init__(self, datatypes: list[P1DataType]):
-        self.data: dict[P1DataType, P1Value | None] = {datatype: None for datatype in datatypes}
+    def __init__(self, datatypes: List[P1DataType]):
+        self.data: Dict[P1DataType, Union[P1Value, None]] = {datatype: None for datatype in datatypes}
 
     def add_value(self, value: P1Value):
         self.data[value.dataType] = value
@@ -88,10 +88,10 @@ class P1Sample:
     def get_value_from_name(self, name: str) -> P1Value:
         return self.data[P1DataType.get_from_name(name)]
 
-    def get_data_types(self) -> list[P1DataType]:
+    def get_data_types(self) -> List[P1DataType]:
         return [key for key in self.data if key != P1DataType.TIMESTAMP]
 
-    def get_timestamp(self) -> datetime | None:
+    def get_timestamp(self) -> Union[datetime, None]:
         try:
             return self.data[P1DataType.TIMESTAMP].value
         except KeyError:
@@ -99,7 +99,7 @@ class P1Sample:
         except AttributeError:
             return None
 
-    def get_extra_value_signals(self) -> list[P1DataType]:
+    def get_extra_value_signals(self) -> List[P1DataType]:
         res = []
         for key in self.data:
             if value := self.data[key]:
@@ -116,7 +116,7 @@ class P1Sample:
                 raise NotImplementedError
             return extra_signals[0]
 
-    def get_data_types_units(self, signals) -> dict[str, str]:
+    def get_data_types_units(self, signals) -> Dict[str, str]:
         res = {}
         for key in self.data:
             if key.name in signals and key != P1DataType.TIMESTAMP:
@@ -129,11 +129,11 @@ class P1Sample:
                     res[key.name] = None
         return res
 
-    def to_data_item_spec(self, signals: list[str]) -> DataItemSpec:
+    def to_data_item_spec(self, signals: List[str]) -> DataItemSpec:
         result = self.get_data_types_units(signals)
         return DataItemSpec(result)
 
-    def to_data_item(self, p1_signals: list[P1DataType]) -> DataItem:
+    def to_data_item(self, p1_signals: List[P1DataType]) -> DataItem:
         if (value := self.get_value(P1DataType.TIMESTAMP)) is not None:
             signals = [p1_signal.name for p1_signal in p1_signals]
             data_item = DataItem(self.to_data_item_spec(signals), timestamp=datetime.timestamp(value.value))

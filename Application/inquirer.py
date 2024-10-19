@@ -1,3 +1,4 @@
+from typing import List
 from datetime import datetime
 from DataHolder.data_holder import DataHolder
 from Application.plugin import Plugin
@@ -9,7 +10,7 @@ class Inquirer:
 
     """
 
-    def __init__(self, data_holder: DataHolder, plugins: list[Plugin]):
+    def __init__(self, data_holder: DataHolder, plugins: List[Plugin]):
         self.data_holder = data_holder
         self.plugins = plugins
 

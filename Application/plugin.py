@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-
+from typing import Tuple, List, Dict
 
 class Plugin(ABC):
     """
@@ -8,7 +8,7 @@ class Plugin(ABC):
     handle an update with a key that was defined at registration.
     """
 
-    def __init__(self, plugin_name, publisher, event_keys: tuple[str]):
+    def __init__(self, plugin_name, publisher, event_keys: Tuple[str]):
         self.plugin_name = plugin_name
         self.publisher = publisher
         for key in event_keys:
@@ -33,7 +33,7 @@ class Publisher:
     """
 
     def __init__(self):
-        self.subscriptions: dict[Plugin, list[str]] = {}
+        self.subscriptions: Dict[Plugin, List[str]] = {}
 
     def register(self, subscriber: Plugin, event_key: str):
         if subscriber not in self.subscriptions:
@@ -53,9 +53,9 @@ class Publisher:
             if plugin.plugin_name == plugin_name:
                 return plugin
 
-    def get_listeners(self, event_key: str) -> list[Plugin]:
+    def get_listeners(self, event_key: str) -> List[Plugin]:
         return [subscriber for subscriber, subscribed_events in self.subscriptions.items() if
                 event_key == '*' or event_key in subscribed_events]
 
-    def get_plugins(self) -> list[Plugin]:
+    def get_plugins(self) -> List[Plugin]:
         return [subscriber for subscriber in self.subscriptions]
