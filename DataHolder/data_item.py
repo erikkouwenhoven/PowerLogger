@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Union, List
 from datetime import datetime
 
 
@@ -52,7 +53,7 @@ class DataItemSpec:
                         else:
                             assert unit == other_unit
 
-    def get_elements(self) -> list[str]:
+    def get_elements(self) -> List[str]:
         return [data_type for data_type in self.elements]
 
     def get_element(self, data_type: str) -> tuple[str, int]:
@@ -67,7 +68,7 @@ class DataItemSpec:
                 return data_type
 
     @classmethod
-    def from_names(cls, names: list[str]):
+    def from_names(cls, names: List[str]):
         return cls({name: None for name in names})
 
 
@@ -76,7 +77,7 @@ class DataItem:
 
     def __init__(self, data_item_spec: DataItemSpec, timestamp: float = None):
         self.data_item_spec: DataItemSpec = data_item_spec
-        self.item_data: list[float | None] = [None] * (len(data_item_spec.get_elements()) + 1)
+        self.item_data: List[float | None] = [None] * (len(data_item_spec.get_elements()) + 1)
         self.item_data[0] = timestamp
 
     def get_value(self, element: str) -> float:
@@ -113,7 +114,7 @@ class DataItem:
         return all([self.item_data[idx] == 0.0 for idx in range(1, len(self.item_data))])
 
     @classmethod
-    def from_array(cls, array: list[float], data_item_spec: DataItemSpec):
+    def from_array(cls, array: List[float], data_item_spec: DataItemSpec):
         data_item = cls(data_item_spec, timestamp=array[0])
         for i, element in enumerate(data_item_spec.get_elements()):
             unit, idx = data_item_spec.get_element(element)
@@ -121,11 +122,12 @@ class DataItem:
                 data_item.item_data[idx + 1] = value
         return data_item
 
-    def to_array(self, data_item_spec: DataItemSpec) -> list[float | None]:
-        array = [None] * (len(data_item_spec.get_elements()) + 1)
+    def to_array(self, selected_signals: Union[List[str], None] = None) -> List[float | None]:
+        signals = self.data_item_spec.get_elements() if selected_signals is None else selected_signals
+        array = [None] * (len(signals) + 1)
         array[0] = self.item_data[0]
-        for i, element in enumerate(data_item_spec.get_elements()):
-            unit, idx = data_item_spec.get_element(element)
+        for i, element in enumerate(signals):
+            unit, idx = self.data_item_spec.get_element(element)
             array[i + 1] = self.item_data[idx + 1]
         return array
 

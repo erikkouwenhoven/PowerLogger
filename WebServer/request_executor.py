@@ -1,6 +1,7 @@
 from typing import Dict, Any, Union
 from Utils.settings import Settings
 from Application.inquirer import Inquirer
+from WebServer.Forms.home_form import HomeForm
 from Application.Models.system_info import SystemInfo
 
 
@@ -9,13 +10,23 @@ class RequestExecutor:
     def __init__(self, inquirer: Inquirer):
         self.inquirer = inquirer
 
+    def home(self, args):
+        home_form = HomeForm(self.inquirer)
+        return home_form.render()
+
     def get_raw(self):
         return self.inquirer.get_P1_interface().get_raw_lines()
 
     def get_realtime_datadump(self):
         return self.inquirer.data_holder.data_store('real_time').data.dump()
 
-    def get_data(self, args):
+    def get_readable_data(self, args):
+        return self.get_data(args, human_readable=True)
+
+    def get_compact_data(self, args):
+        return self.get_data(args, human_readable=False)
+
+    def get_data(self, args, human_readable):
         info_msg = "Usage: get_data?data_store_name=<> or get_data?data_store_name=<>&signals=<,>"
         if dict_args := self._convert_args(args):
             try:
@@ -28,7 +39,7 @@ class RequestExecutor:
                     signals = None
             except KeyError:
                 return info_msg
-            return data_store.data.serialize(signals)
+            return data_store.data.serialize(signals, human_readable=human_readable)
         else:
             return info_msg
 

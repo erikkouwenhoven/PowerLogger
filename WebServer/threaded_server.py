@@ -39,9 +39,11 @@ def make_handler_class(request_executor: RequestExecutor):
             TEXT = auto()
 
         URL_VIEWS = {
+            "/home": (ResponseReturn.TEXT, "home"),
             "/data_stores": (ResponseReturn.DATA, "get_data_stores"),
             "/data_store_info": (ResponseReturn.DATA, "get_data_store_info"),
-            "/get_data": (ResponseReturn.DATA, "get_data"),
+            "/get_data": (ResponseReturn.DATA, "get_compact_data"),
+            "/show_data": (ResponseReturn.DATA, "get_readable_data"),
             "/shift_info": (ResponseReturn.DATA, "get_shift_info"),
             "/system_info": (ResponseReturn.DATA, "get_system_info"),
             "/raw": (ResponseReturn.TEXT, "getRaw"),
@@ -94,13 +96,9 @@ def make_handler_class(request_executor: RequestExecutor):
             if self.URL_VIEWS[parsed.path][0] == self.ResponseReturn.DATA:
                 self.wfile.write(json.dumps(result).encode('utf-8'))
             else:
-                self.wfile.write(b"<html><head><title>Power logger</title></head>")
-                self.wfile.write(b"<body><p>Erik Kouwenhoven, 2023</p>")
-                self.wfile.write(b"<p>You accessed path: %b</p>" % self.path.encode())
                 for line in result:
-                    self.wfile.write(line + b"<br>")
-                self.wfile.write(b"</body></html>")
-            logging.debug(f"result from do_GET {parsed.query}: {result}")
+                    self.wfile.write(f"{line}\n".encode('utf-8'))
+            # logging.debug(f"result from do_GET {parsed.query}: {result}")
             logging.debug(f"GET request completed")
 
         def help(self):

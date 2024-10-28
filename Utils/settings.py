@@ -1,11 +1,11 @@
 import os
 from typing import List, Union, Tuple, Dict
 import configparser
-from Utils.time_delay import time_delay_minutes
 import serial
 from DataHolder.buffer_attrs import Persistency, LifeSpan
 from P1System.p1_data_classes import P1DataType
 from Application.Models.operation import Operation
+from Scheduler.sched_attrs import CronPeriodicity
 
 
 class Settings:
@@ -92,10 +92,14 @@ class Settings:
     def scheduled_jobs(self) -> List[str]:
         return self.config.get('SCHEDULER', 'scheduled_jobs').split()
 
-    def interval_minutes(self, job_id) -> int:
-        return eval(self.config.get('SCHEDULER', job_id + '_interval_minutes'))
+    def interval_minutes(self, job_id) -> Union[int, None]:
+        try:
+            result_str = self.config.get('SCHEDULER', job_id + '_interval_minutes')
+        except configparser.NoOptionError:
+            return None
+        return eval(result_str)
 
-    def start_at_time(self, job_id) -> Union[int, None]:
+    def start_at_time(self, job_id) -> Union[str, None]:
         """
         Optionele parameter, indien niet ingevuld wordt None geretourneerd.
         Geeft de tijd van de dag aan waarop de job moet starten in de vorm van hh:mm.
@@ -103,10 +107,16 @@ class Settings:
         Geeft de delay in minuten terug.
         """
         try:
-            time_str = self.config.get('SCHEDULER', job_id + '_start_at_time')
+            return self.config.get('SCHEDULER', job_id + '_start_at_time')
         except configparser.NoOptionError:
             return None
-        return time_delay_minutes(time_str)
+
+    def periodicity(self, job_id) -> Union[CronPeriodicity, None]:
+        try:
+            result_per = self.config.get('SCHEDULER', job_id + '_periodicity').upper()
+        except configparser.NoOptionError:
+            return None
+        return CronPeriodicity[result_per]
 
     def sched_job_sources(self, job_id) -> List[str]:
         return self.config.get('SCHEDULER', job_id + '_sources').split()

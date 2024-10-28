@@ -30,6 +30,14 @@ class Storage(ABC):
         pass
 
     @abstractmethod
+    def get_prev_data_item(self, idx: int) -> DataItem:
+        pass
+
+    @abstractmethod
+    def get_next_data_item(self, idx: int) -> DataItem:
+        pass
+
+    @abstractmethod
     def add_data_item(self, data_item: DataItem):
         pass
 
@@ -66,8 +74,9 @@ class Storage(ABC):
         except AttributeError:
             return None
 
-    def serialize(self, signals: Union[List[str], None] = None) -> Dict:
-        result = {"timestamp": [str(datetime.fromtimestamp(self.get_data_item(idx).get_timestamp())) for idx in self.timed_indexes()]}
+    def serialize(self, signals: Union[List[str], None] = None, human_readable: bool = True) -> Dict:
+        result = {"timestamp": [str(datetime.fromtimestamp(self.get_data_item(idx).get_timestamp())) if human_readable is True
+                                else self.get_data_item(idx).get_timestamp() for idx in self.timed_indexes()]}
         if signals is None:
             signals = self.data_item_spec.get_elements()
         for signal in signals:
@@ -88,21 +97,19 @@ class Storage(ABC):
         index = self.index_from_time(datetime.fromtimestamp(at_timestamp))
         if (data_item := self.get_data_item(index)) and (curr_timestamp := data_item.get_timestamp()):
             if curr_timestamp > at_timestamp:
-                index -= 1
                 next_data_item = data_item
                 next_timestamp = curr_timestamp
-                data_item = self.get_data_item(index)
+                data_item = self.get_prev_data_item(index)
                 curr_timestamp = data_item.get_timestamp()
             else:
-                next_data_item = self.get_data_item(index + 1)
+                next_data_item = self.get_next_data_item(index)
                 next_timestamp = next_data_item.get_timestamp()
             if data_item and next_data_item and curr_timestamp and next_timestamp:
                 if curr_timestamp < at_timestamp < next_timestamp:
                     float_part = ((at_timestamp - curr_timestamp) / (next_timestamp - curr_timestamp))
-                    if curr := data_item.get_value(signal):
-                        if next := next_data_item.get_value(signal):
-                            # logging.debug(f"Interpol ({curr_timestamp}, {curr}), ({next_timestamp}, {next}) result ({at_timestamp}, {(1 - float_part) * curr + float_part * next})")
-                            return (1 - float_part) * curr + float_part * next
+                    if curr_val := data_item.get_value(signal):
+                        if next_val := next_data_item.get_value(signal):
+                            return (1 - float_part) * curr_val + float_part * next_val
                 else:
                     print(f"PANIC! interpolation at {at_timestamp}, brackets {curr_timestamp, next_timestamp}")
 
@@ -114,7 +121,7 @@ class Storage(ABC):
                   f"Time range: from {self.get_data_item(self.min_time_index()).get_timestamp_str()} to"
                   f"{self.get_data_item(self.last_index()).get_timestamp_str()}"]
         logging.debug(f"Timed indexes: {[ind for ind in self.timed_indexes()]}")
-        result.append(f"Data: {self.serialize()}")
+        # result.append(f"Data: {self.serialize()}")
         return result
 
     def __str__(self) -> str:
@@ -199,6 +206,12 @@ class CircularStorage(Storage, metaclass=ABCMeta):
             if abs(hi - lo) <= 1:
                 return lo if timestamp - self.get_data_item(lo).get_timestamp() < self.get_data_item(hi).get_timestamp() - timestamp else hi
 
+    def get_prev_data_item(self, idx: int) -> DataItem:
+        return self.get_data_item((idx - 1 + self.length()) % self.length())
+
+    def get_next_data_item(self, idx: int) -> DataItem:
+        return self.get_data_item((idx + 1) % self.length())
+
     def dump(self) -> List[str]:
         result = [f"Dump of circular buffer",
                   f"Number of items: {self.length()}",
@@ -261,6 +274,14 @@ class LinearStorage(Storage, metaclass=ABCMeta):
             if hi - lo <= 1:
                 return lo if timestamp - self.get_data_item(lo).get_timestamp() < self.get_data_item(hi).get_timestamp() - timestamp else hi
 
+    def get_prev_data_item(self, idx: int) -> DataItem:
+        if idx > 0:
+            return self.get_data_item(idx - 1)
+
+    def get_next_data_item(self, idx: int) -> DataItem:
+        if idx < self.last_index():
+            return self.get_data_item(self.last_index() + 1)
+
 
 class MemStorage(Storage, metaclass=ABCMeta):
 
@@ -274,7 +295,7 @@ class MemStorage(Storage, metaclass=ABCMeta):
     def get_data_item(self, idx: Union[int, None]) -> Union[DataItem, None]:
         try:
             return self.data[idx]
-        except IndexError:
+        except (IndexError, TypeError):
             return None
 
     def append(self, data_item: DataItem):
@@ -304,21 +325,22 @@ class PersistentStorage(Storage, metaclass=ABCMeta):
             return DataItem.from_array(res_array, self.data_item_spec)
 
     def append(self, data_item: DataItem):
-        array = data_item.to_array(self.data_item_spec)
+        array = data_item.to_array()
         self.db_interface.append_data_item(self.table, self.data_item_spec, array)
 
     def insert(self, data_item: DataItem, idx: int):
-        array = data_item.to_array(self.data_item_spec)
+        array = data_item.to_array()
         self.db_interface.insert_data_item(self.table, idx, self.data_item_spec, array)
 
     def modify(self, idx: int, element: str, value: float):
         self.db_interface.modify_element(self.table, idx, element, value)
 
-    def serialize(self, signals: Union[List[str], None] = None) -> Dict:  # override as element-wise data retrieval would be too slow in database implementation
+    def serialize(self, signals: Union[List[str], None] = None, human_readable: bool = True) -> Dict:  # override as element-wise data retrieval would be too slow in database implementation
         all_data = self.db_interface.get_all_data(self.table)
         if signals is None:
             signals = [signal for signal in all_data if signal not in ["timestamp", "units"]]
-        serialized = {"timestamp": [str(datetime.fromtimestamp(all_data["timestamp"][idx])) for idx in self.timed_indexes()]}
+        serialized = {"timestamp": [str(datetime.fromtimestamp(all_data["timestamp"][idx])) if human_readable is True
+                                    else all_data["timestamp"][idx] for idx in self.timed_indexes()]}
         for signal in signals:
             serialized[signal] = [all_data[signal][idx] for idx in self.timed_indexes()]
         serialized["units"] = {str(data_type): self.data_item_spec.get_unit(data_type) for data_type in self.data_item_spec.get_elements()}

@@ -64,9 +64,9 @@ class NetworkInterface:
     def network_awake(network: ZWaveNetwork):
         print("***** Network is awake")
         logging.info("***** Network is awake")
-        dispatcher.connect(self.value_update, ZWaveNetwork.SIGNAL_VALUE)
-        dispatcher.connect(self.value_changed, ZWaveNetwork.SIGNAL_VALUE_CHANGED)
-        dispatcher.connect(self.node_event, ZWaveNetwork.SIGNAL_NODE_EVENT)
+        dispatcher.connect(NetworkInterface.value_update, ZWaveNetwork.SIGNAL_VALUE)
+        dispatcher.connect(NetworkInterface.value_changed, ZWaveNetwork.SIGNAL_VALUE_CHANGED)
+        dispatcher.connect(NetworkInterface.node_event, ZWaveNetwork.SIGNAL_NODE_EVENT)
 
     def value_update(self, network: ZWaveNetwork, node: ZWaveNode, value: ZWaveValue):
         logging.info("Hello from value : {}.".format(value))

@@ -47,8 +47,6 @@ class Processor:
             operands = source_signals
         assert all([operand in source_signals for operand in operands])
         assert len(dest_signals) == 1 or all([operand in dest_signals for operand in operands])  # het resultaat van de operatie is ondubbelzinnig
-        if operation != Operation.AVG:
-            assert len(operands) == 1
 
         dest_end_time = self.data_holder.get_end_time(dest)
         logging.debug(f"dest_end_time = {dest_end_time}")
@@ -103,9 +101,13 @@ class Processor:
             assert (period := self.data_holder.data_store(dest).sampling_time_minutes)
             assert len(sources) == 1
             ref_storage = self.data_holder.data_store(sources[0]).data
-            at_time = dest_end_time if dest_end_time is not None else datetime.now()
+            if operation != Operation.DIFF:
+                at_time = dest_end_time if dest_end_time is not None else datetime.now() - timedelta(minutes=period)
+            else:
+                at_time = dest_end_time + timedelta(minutes=period) if dest_end_time is not None else datetime.now() - timedelta(minutes=period)
             if operation in (Operation.AVG, Operation.SUM):
-                result_data_item = self.average_sum(ref_storage, at_time, at_time + timedelta(minutes=period), operands, avg=True)
+                result_data_item = self.average_sum(ref_storage, at_time, at_time + timedelta(minutes=period), operands,
+                                                    avg=operation == Operation.AVG)
             elif operation == Operation.DIFF:
                 assert len(operands) == 1
                 operand = operands[0]
@@ -130,16 +132,19 @@ class Processor:
         data_item_spec = DataItemSpec({signal: storage.data_item_spec.get_unit(signal) for signal in selected_signals})
         timestamp = 0.5 * (datetime.timestamp(from_time) + datetime.timestamp(to_time)) if avg is True else datetime.timestamp(to_time)
         sample = DataItem(data_item_spec, timestamp=timestamp)
-        logging.debug(f"avg/sum: from = {from_time}, to = {to_time}, time = {datetime.fromtimestamp(sample.get_timestamp())}")
+        hours = (to_time - from_time).total_seconds() / 3600
+        logging.debug(f"{'avg' if avg is True else 'sum'}: from = {from_time}, to = {to_time}, hours = {hours}, time = {datetime.fromtimestamp(sample.get_timestamp())}")
         for signal in selected_signals:
             cum_sum = 0.0
             cum_count = 0
             for idx in storage.timed_indexes(storage.index_from_time(from_time), storage.index_from_time(to_time)):
                 if (value := storage.get_data_item(idx).get_value(signal)) is not None:
+                    logging.debug(f"average_sum: idx={idx}, value={value} storage={storage}, signal={signal}")
                     cum_sum += value
                     cum_count += 1
             try:
-                sample.set_value(signal, cum_sum / cum_count if avg is True else cum_sum)
+                factor = cum_count if avg is True else cum_count / hours
+                sample.set_value(signal, cum_sum / factor)
             except ZeroDivisionError:
                 sample.set_value(signal, 0.0)
         return sample

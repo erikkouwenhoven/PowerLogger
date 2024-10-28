@@ -2,10 +2,12 @@ from typing import List
 from datetime import datetime, timedelta
 import logging
 from apscheduler.schedulers.background import BackgroundScheduler
-from enum import Enum, auto
+from apscheduler.triggers.cron import CronTrigger
+from Scheduler.sched_attrs import JobTrigger, CronPeriodicity
 from Utils.settings import Settings
 from Application.Models.operation import Operation
 from Application.processor import Processor
+from Utils.time_delay import time_delay_minutes
 
 
 class Scheduler:
@@ -32,16 +34,31 @@ class Scheduler:
                           'operand': sched_job.operand,
                           'id': job_name,
                           }
-                start_date = datetime.now() + timedelta(minutes=sched_job.delay_minutes if sched_job.delay_minutes else 0)
-                scheduler.add_job(self.exec_job,
-                                  'interval',
-                                  minutes=sched_job.interval_minutes,
-                                  kwargs=kwargs,
-                                  start_date=start_date,
-                                  id=job_name)
+                if sched_job.trigger == JobTrigger.PERIODIC:
+                    start_date = datetime.now() + timedelta(minutes=sched_job.delay_minutes if sched_job.delay_minutes else 0)
+                    scheduler.add_job(self.exec_job,
+                                      'interval',
+                                      minutes=sched_job.interval_minutes,
+                                      kwargs=kwargs,
+                                      start_date=start_date,
+                                      name=job_name,
+                                      id=job_name)
+                else:
+                    crontabs = {
+                        CronPeriodicity.DAILY: "0 0 * * *",
+                        CronPeriodicity.MONTHLY: "0 0 1 * *",
+                        CronPeriodicity.YEARLY: "0 0 1 1 *",
+                    }
+                    scheduler.add_job(self.exec_job,
+                                      # 'cron',
+                                      CronTrigger.from_crontab(crontabs[sched_job.periodicity]),
+                                      kwargs=kwargs,
+                                      name=job_name,
+                                      id=job_name)
             else:
                 logging.error(f"Job {sched_job} not started")
         scheduler.start()
+        self.scheduler.print_jobs(out=logging.StreamHandler().stream)
 
     def exec_job(self, **kwargs):
         print(f"exec_job {kwargs['id']}")
@@ -72,7 +89,7 @@ class Scheduler:
             logging.error(f"check_job_parameters: The result signals of the operation are ambiguous: destination: {dest_signals}, operands: {operands}")
             return False
 
-        if operation != Operation.AVG and len(operands) != 1:
+        if operation not in (Operation.AVG, Operation.SUM) and len(operands) != 1:
             logging.error(f"check_job_parameters: The operation {operation} requires exactly one operand, instead {len(operands)} are found")
             return False
 
@@ -84,31 +101,38 @@ class Scheduler:
 
         return True
 
+    def __repr__(self):
+        self.scheduler.print_jobs()
+
 
 class ScheduledJob:
     """
     Houdt de gegevens van een scheduled job bij.
     Mogelijke trigger is: PERIODIC of CRON.
-    Bij PERIODIC hoort interval_minutes; bij CRON hoort Periodicity.
+    Bij PERIODIC hoort interval_minutes en start_at_time; bij CRON hoort Periodicity. De starttijd wordt gegeven
+    (PERIODIC) of gezet op aanvang periode volgens periodicity (dus als MONTHLY dan 00:00 eerste van de maand)
     """
-
-    class JobTrigger(Enum):
-        PERIODIC = auto()
-        CRON = auto()
-
-    class CronPeriodicity(Enum):
-        MONTHLY = auto()
-        YEARLY = auto()
 
     def __init__(self, job_name: str):
         self.job_name = job_name
         self.sources = Settings().sched_job_sources(job_name)
         self.destination = Settings().sched_job_destination(job_name)
         self.interval_minutes = Settings().interval_minutes(job_name)
-        if self.interval_minutes:
-            self.job_trigger = self.JobTrigger.PERIODIC
-        else:
-            self.job_trigger = self.JobTrigger.CRON
-            self.periodicity = Settings().periodicity(job_name)
-        self.delay_minutes = Settings().start_at_time(job_name)
+        self.periodicity = Settings().periodicity(job_name)
+        self.delay_minutes = None
+        start_at_time = Settings().start_at_time(job_name)
+        if self.interval_minutes is None:  # cron
+            assert start_at_time is None, f"Job {job_name}, val {start_at_time}"
+            assert self.periodicity is not None, f"Job {job_name}, val {self.periodicity}"
+        else:  # interval
+            assert self.periodicity is None, f"Job {job_name}, val {self.periodicity}"
+            if start_at_time is not None:
+                self.delay_minutes = time_delay_minutes(start_at_time)
         self.operation, self.operand = Settings().sched_job_operation(job_name)
+
+    @property
+    def trigger(self) -> JobTrigger:
+        if self.interval_minutes is None:
+            return JobTrigger.CRON
+        else:
+            return JobTrigger.PERIODIC
