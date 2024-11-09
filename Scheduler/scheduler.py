@@ -45,6 +45,7 @@ class Scheduler:
                                       id=job_name)
                 else:
                     crontabs = {
+                        CronPeriodicity.HOURLY: "0 * * * *",
                         CronPeriodicity.DAILY: "0 0 * * *",
                         CronPeriodicity.MONTHLY: "0 0 1 * *",
                         CronPeriodicity.YEARLY: "0 0 1 1 *",
@@ -89,7 +90,7 @@ class Scheduler:
             logging.error(f"check_job_parameters: The result signals of the operation are ambiguous: destination: {dest_signals}, operands: {operands}")
             return False
 
-        if operation not in (Operation.AVG, Operation.SUM) and len(operands) != 1:
+        if operation not in (Operation.AVG, Operation.INTEGRATE) and len(operands) != 1:
             logging.error(f"check_job_parameters: The operation {operation} requires exactly one operand, instead {len(operands)} are found")
             return False
 

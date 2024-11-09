@@ -88,6 +88,10 @@ class DataItem:
         unit, idx = self.data_item_spec.get_element(element)
         return f"{self.item_data[idx + 1]} {unit}"
 
+    def get_unit(self, element: str) -> str:
+        unit, _ = self.data_item_spec.get_element(element)
+        return unit
+
     def set_value(self, element: str, value: float):
         data_type = self.data_item_spec.datatype_from_name(element)
         unit, idx = self.data_item_spec.get_element(data_type)
@@ -118,7 +122,7 @@ class DataItem:
         data_item = cls(data_item_spec, timestamp=array[0])
         for i, element in enumerate(data_item_spec.get_elements()):
             unit, idx = data_item_spec.get_element(element)
-            if (value := array[i]) is not None:
+            if (value := array[i + 1]) is not None:
                 data_item.item_data[idx + 1] = value
         return data_item
 

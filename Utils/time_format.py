@@ -13,7 +13,7 @@ def time_ago(time_stamp: float) -> str:
     if days:
         return f"{days} d"
     elif hrs:
-        return f"{hrs} h"
+        return f"{hrs} h {mins} m"
     elif mins:
         return f"{mins} m"
     else:

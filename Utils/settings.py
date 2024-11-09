@@ -157,9 +157,6 @@ class Settings:
     def get_shift_in_seconds(self) -> float:
         return float(self.config.get('PROCESSING', 'shift_in_seconds'))
 
-    def get_unit(self, signal: str) -> str:
-        return self.config.get('PROCESSING', 'unit_' + signal)
-
     def get_config(self):
         if os.name == 'nt':
             return self.config.get('ZWAVE', 'configpath_windows')

@@ -7,6 +7,7 @@ from DataHolder.data_holder import DataHolder
 from DataHolder.storage import Storage
 from DataHolder.data_store import DataStore
 from Utils.settings import Settings
+from Utils.unit_handling import unit_integrated, unit_differentiated
 
 
 class Processor:
@@ -97,7 +98,7 @@ class Processor:
                         # logging.info(f"Modified signal {shift_signal} at {datetime.fromtimestamp(timestamp)} to value {shifted}")
 
         # Uitvoeren van operatie met aanmaak nieuw DataItem
-        elif operation in (Operation.AVG, Operation.SUM, Operation.DIFF, Operation.VALUE):
+        elif operation in (Operation.AVG, Operation.INTEGRATE, Operation.DIFF, Operation.VALUE):
             assert (period := self.data_holder.data_store(dest).sampling_time_minutes)
             assert len(sources) == 1
             ref_storage = self.data_holder.data_store(sources[0]).data
@@ -105,9 +106,9 @@ class Processor:
                 at_time = dest_end_time if dest_end_time is not None else datetime.now() - timedelta(minutes=period)
             else:
                 at_time = dest_end_time + timedelta(minutes=period) if dest_end_time is not None else datetime.now() - timedelta(minutes=period)
-            if operation in (Operation.AVG, Operation.SUM):
-                result_data_item = self.average_sum(ref_storage, at_time, at_time + timedelta(minutes=period), operands,
-                                                    avg=operation == Operation.AVG)
+            if operation in (Operation.AVG, Operation.INTEGRATE):
+                result_data_item = self.average_integrate(ref_storage, at_time, at_time + timedelta(minutes=period), operands,
+                                                          avg=operation == Operation.AVG)
             elif operation == Operation.DIFF:
                 assert len(operands) == 1
                 operand = operands[0]
@@ -128,18 +129,27 @@ class Processor:
                 operand_data_store.data.add_measurement(result_data_item)
 
     @staticmethod
-    def average_sum(storage: Storage, from_time: datetime, to_time: datetime, selected_signals: List[str], avg=True) -> DataItem:
-        data_item_spec = DataItemSpec({signal: storage.data_item_spec.get_unit(signal) for signal in selected_signals})
+    def average_integrate(storage: Storage, from_time: datetime, to_time: datetime, selected_signals: List[str], avg=True) -> DataItem:
+        """
+        Bepaalt van een selectie gespecificeerde signalen over een gegeven tijd het gemiddelde of de integraal.
+        Het gemiddelde heeft dezelfde eenheid als het oorspronkelijke signaal en is de som van de signaalwaarden over
+        het tijdsinterval gedeeld door het aantal waarden.
+        De integraal heeft de tijd toegevoegd in zijn eenheid. Uitgaande van equidistante tijdsintervallen is de
+        integraal bepaald door de som van de signaalwaarden over het tijdsinterval gedeeld door aantal waarden maal
+        lengte van tijdsinterval.
+        """
+        data_item_spec = DataItemSpec({signal: storage.data_item_spec.get_unit(signal) if avg is True
+            else unit_integrated(storage.data_item_spec.get_unit(signal)) for signal in selected_signals})
         timestamp = 0.5 * (datetime.timestamp(from_time) + datetime.timestamp(to_time)) if avg is True else datetime.timestamp(to_time)
         sample = DataItem(data_item_spec, timestamp=timestamp)
         hours = (to_time - from_time).total_seconds() / 3600
-        logging.debug(f"{'avg' if avg is True else 'sum'}: from = {from_time}, to = {to_time}, hours = {hours}, time = {datetime.fromtimestamp(sample.get_timestamp())}")
+        logging.debug(f"{'avg' if avg is True else 'integrate'}: from = {from_time}, to = {to_time}, hours = {hours}, time = {datetime.fromtimestamp(sample.get_timestamp())}")
         for signal in selected_signals:
             cum_sum = 0.0
             cum_count = 0
             for idx in storage.timed_indexes(storage.index_from_time(from_time), storage.index_from_time(to_time)):
                 if (value := storage.get_data_item(idx).get_value(signal)) is not None:
-                    logging.debug(f"average_sum: idx={idx}, value={value} storage={storage}, signal={signal}")
+                    # logging.debug(f"average_sum: idx={idx}, data_item={storage.get_data_item(idx)} signal={signal} value={value}")
                     cum_sum += value
                     cum_count += 1
             try:
@@ -174,7 +184,8 @@ class Processor:
         else:
             logging.debug(f"differentiate: could not assess new")
             return None
-        sample = DataItem(DataItemSpec({diff_signal: Settings().get_unit(diff_signal)}), timestamp=at_time.timestamp())
+        sample = DataItem(DataItemSpec({diff_signal: unit_differentiated(curr_item.get_unit(signal))}),
+                          timestamp=at_time.timestamp())
         sample.set_value(diff_signal, new - curr)
         return sample
 

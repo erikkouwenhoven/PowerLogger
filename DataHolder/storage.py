@@ -26,7 +26,7 @@ class Storage(ABC):
         pass
 
     @abstractmethod
-    def get_data_item(self, idx: Union[int, None]) -> DataItem:
+    def get_data_item(self, idx: Union[int, None]) -> Union[DataItem, None]:
         pass
 
     @abstractmethod
@@ -308,7 +308,6 @@ class MemStorage(Storage, metaclass=ABCMeta):
         self.data[idx].set_value(element, value)
 
 
-
 class PersistentStorage(Storage, metaclass=ABCMeta):
 
     def __init__(self, elems: List[str], db_interface: DBInterface, table: str):
@@ -319,7 +318,7 @@ class PersistentStorage(Storage, metaclass=ABCMeta):
     def length(self) -> int:
         return self.db_interface.get_count(self.table)
 
-    def get_data_item(self, idx: Union[int, None]) -> DataItem:
+    def get_data_item(self, idx: Union[int, None]) -> Union[DataItem, None]:
         if idx is not None:
             res_array = self.db_interface.get_data_items(self.table, idx, self.data_item_spec.get_elements())
             return DataItem.from_array(res_array, self.data_item_spec)

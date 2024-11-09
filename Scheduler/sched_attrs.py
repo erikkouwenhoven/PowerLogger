@@ -7,6 +7,7 @@ class JobTrigger(Enum):
 
 
 class CronPeriodicity(Enum):
+    HOURLY = auto()
     DAILY = auto()
     MONTHLY = auto()
     YEARLY = auto()
