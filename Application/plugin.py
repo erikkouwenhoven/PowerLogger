@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Tuple, List, Dict
 
+
 class Plugin(ABC):
     """
     A Plugin is an add-on to the core application, that may or may nor be activated.
@@ -16,8 +17,8 @@ class Plugin(ABC):
 
     @abstractmethod
     def update(self, event_key, data):
-        assert self in self.publisher
-        assert event_key in self.publisher[self]
+        assert self in self.publisher.subscriptions
+        assert event_key in self.publisher.subscriptions[self]
         pass
 
 

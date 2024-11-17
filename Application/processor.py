@@ -40,14 +40,16 @@ class Processor:
         DIFF: maak eem nieuw DataItem
         AVG: maak een nieuw DataItem
         """
-        logging.info(f"Call process_derived_signal with sources={sources}, dest={dest}, operation={operation}, operands={operands}")
+        logging.info(
+            f"Call process_derived_signal with sources={sources}, dest={dest}, operation={operation}, operands={operands}")
         source_signals = [signal for source in sources for signal in self.data_holder.data_store(source).signals]
         dest_signals = [signal for signal in self.data_holder.data_store(dest).signals]
         # assert all([dest_signal in source_signals for dest_signal in dest_signals])
         if operands == ["*"]:
-            operands = source_signals
+            operands = dest_signals
         assert all([operand in source_signals for operand in operands])
-        assert len(dest_signals) == 1 or all([operand in dest_signals for operand in operands])  # het resultaat van de operatie is ondubbelzinnig
+        assert len(dest_signals) == 1 or all(
+            [operand in source_signals for operand in operands])  # het resultaat van de operatie is ondubbelzinnig
 
         dest_end_time = self.data_holder.get_end_time(dest)
         logging.debug(f"dest_end_time = {dest_end_time}")
@@ -82,18 +84,21 @@ class Processor:
                 logging.info(f"Merged {merged_data_item}")
 
         # Uitvoeren van operatie door modificatie van bestaand signaal
-        if operation in (Operation.SHIFT, ):
+        if operation in (Operation.SHIFT,):
             assert len(operands) == 1
             shift_signal = operands[0]
-            src_data_stores = list(filter(lambda ds: shift_signal in ds.signals, [self.data_holder.data_store(src) for src in sources]))
+            src_data_stores = list(
+                filter(lambda ds: shift_signal in ds.signals, [self.data_holder.data_store(src) for src in sources]))
             assert len(src_data_stores) == 1
             src_data_store = src_data_stores[0]
-            i_updates = operand_data_store.data.timed_indexes(operand_data_store.data.index_from_time(dest_end_time), None)
+            i_updates = operand_data_store.data.timed_indexes(operand_data_store.data.index_from_time(dest_end_time),
+                                                              None)
             for i_update in i_updates:
                 if operation == Operation.SHIFT:
                     if data_item := operand_data_store.data.get_data_item(i_update):
                         timestamp = data_item.get_timestamp()
-                        shifted = self.shift(src_data_store.data, shift_signal, timestamp, Settings().get_shift_in_seconds())
+                        shifted = self.shift(src_data_store.data, shift_signal, timestamp,
+                                             Settings().get_shift_in_seconds())
                         operand_data_store.data.modify(i_update, shift_signal, shifted)
                         # logging.info(f"Modified signal {shift_signal} at {datetime.fromtimestamp(timestamp)} to value {shifted}")
 
@@ -105,16 +110,20 @@ class Processor:
             if operation != Operation.DIFF:
                 at_time = dest_end_time if dest_end_time is not None else datetime.now() - timedelta(minutes=period)
             else:
-                at_time = dest_end_time + timedelta(minutes=period) if dest_end_time is not None else datetime.now() - timedelta(minutes=period)
+                at_time = dest_end_time + timedelta(
+                    minutes=period) if dest_end_time is not None else datetime.now() - timedelta(minutes=period)
             if operation in (Operation.AVG, Operation.INTEGRATE):
-                result_data_item = self.average_integrate(ref_storage, at_time, at_time + timedelta(minutes=period), operands,
-                                                          avg=operation == Operation.AVG)
+                ref_storage.timestamp_range()
+                start_time = max(at_time, datetime.fromtimestamp(ref_storage.timestamp_range()[0]))
+                result_data_item = self.average_integrate(ref_storage, start_time, at_time + timedelta(minutes=period),
+                                                          operands, avg=operation == Operation.AVG)
             elif operation == Operation.DIFF:
                 assert len(operands) == 1
                 operand = operands[0]
                 assert operand in source_signals
                 assert len(dest_signals) == 1
-                result_data_item = self.differentiate(ref_storage, operand, dest_signals[0], at_time, timedelta(minutes=period))
+                result_data_item = self.differentiate(ref_storage, operand, dest_signals[0], at_time,
+                                                      timedelta(minutes=period))
             elif operation == Operation.VALUE:
                 storage = self.data_holder.data_store(sources[0]).data
                 data_item_spec = DataItemSpec({signal: storage.data_item_spec.get_unit(signal) for signal in operands})
@@ -129,7 +138,8 @@ class Processor:
                 operand_data_store.data.add_measurement(result_data_item)
 
     @staticmethod
-    def average_integrate(storage: Storage, from_time: datetime, to_time: datetime, selected_signals: List[str], avg=True) -> DataItem:
+    def average_integrate(storage: Storage, from_time: datetime, to_time: datetime, selected_signals: List[str],
+                          avg=True) -> DataItem:
         """
         Bepaalt van een selectie gespecificeerde signalen over een gegeven tijd het gemiddelde of de integraal.
         Het gemiddelde heeft dezelfde eenheid als het oorspronkelijke signaal en is de som van de signaalwaarden over
@@ -140,18 +150,18 @@ class Processor:
         """
         data_item_spec = DataItemSpec({signal: storage.data_item_spec.get_unit(signal) if avg is True
             else unit_integrated(storage.data_item_spec.get_unit(signal)) for signal in selected_signals})
-        timestamp = 0.5 * (datetime.timestamp(from_time) + datetime.timestamp(to_time)) if avg is True else datetime.timestamp(to_time)
+        timestamp = 0.5 * (datetime.timestamp(from_time) + datetime.timestamp(to_time))
         sample = DataItem(data_item_spec, timestamp=timestamp)
         hours = (to_time - from_time).total_seconds() / 3600
-        logging.debug(f"{'avg' if avg is True else 'integrate'}: from = {from_time}, to = {to_time}, hours = {hours}, time = {datetime.fromtimestamp(sample.get_timestamp())}")
+        logging.debug(f"{'avg' if avg is True else 'integrate'}: from = {from_time}, to = {to_time}, hours = {hours}, "
+                      f"time = {datetime.fromtimestamp(sample.get_timestamp())}")
         for signal in selected_signals:
             cum_sum = 0.0
             cum_count = 0
             for idx in storage.timed_indexes(storage.index_from_time(from_time), storage.index_from_time(to_time)):
                 if (value := storage.get_data_item(idx).get_value(signal)) is not None:
-                    # logging.debug(f"average_sum: idx={idx}, data_item={storage.get_data_item(idx)} signal={signal} value={value}")
                     cum_sum += value
-                    cum_count += 1
+                cum_count += 1
             try:
                 factor = cum_count if avg is True else cum_count / hours
                 sample.set_value(signal, cum_sum / factor)
@@ -160,7 +170,8 @@ class Processor:
         return sample
 
     @staticmethod
-    def differentiate(storage: Storage, signal: str, diff_signal: str, at_time: datetime, diff_time: timedelta) -> Union[DataItem, None]:
+    def differentiate(storage: Storage, signal: str, diff_signal: str, at_time: datetime, diff_time: timedelta) -> \
+            Union[DataItem, None]:
         """
         Geeft het verschil van een signaal op een gegeven moment en een delta tijd daarvoor
         :param storage: Storage die de data bevat
@@ -180,7 +191,8 @@ class Processor:
             return None
         if new_item := storage.get_data_item(storage.index_from_time(at_time + diff_time)):
             new = new_item.get_value(signal)
-            logging.debug(f"differentiate: time = {at_time + diff_time} index = {storage.index_from_time(at_time + diff_time)} new = {new}")
+            logging.debug(
+                f"differentiate: time = {at_time + diff_time} index = {storage.index_from_time(at_time + diff_time)} new = {new}")
         else:
             logging.debug(f"differentiate: could not assess new")
             return None

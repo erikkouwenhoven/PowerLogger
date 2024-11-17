@@ -78,7 +78,8 @@ class NetworkInterface:
         self.show_result(node, value)
         self.value_received_CB(node, value)
 
-    def node_event(self, **kwargs):
+    @staticmethod
+    def node_event(**kwargs):
         print("Hello from node event : {}.".format(kwargs))
 
     @staticmethod

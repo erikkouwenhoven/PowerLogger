@@ -1,15 +1,15 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 
 
 date_time_fmt = '%d-%m-%y %H:%M:%S'
 
 
 def time_ago(time_stamp: float) -> str:
-    delta = int((datetime.now() - datetime.fromtimestamp(time_stamp)).total_seconds())
-    days = delta // (24 * 3600)
-    hrs = delta // 3600
-    mins = delta // 60
-    secs = delta % 60
+    delta = datetime.now() - datetime.fromtimestamp(time_stamp)
+    days = delta.days
+    hrs = delta.min // 60
+    mins = delta.min
+    secs = delta.seconds
     if days:
         return f"{days} d"
     elif hrs:

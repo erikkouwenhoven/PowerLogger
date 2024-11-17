@@ -17,7 +17,8 @@ class Form:
     def render(self):
         pass
 
-    def get_html(self, html_file):
+    @staticmethod
+    def get_html(html_file):
         with open(html_file) as file:
             result = file.read().splitlines()
         return result
@@ -36,9 +37,9 @@ class Form:
     def update_element(self, element_id, element_value):
         S = ['  <script type="text/javascript">',
              f'    var element = document.getElementById("{element_id}");']
-        if type(element_value) == bool:
+        if isinstance(element_value, bool):
             S.append(f'    element.checked = {"true" if element_value is True else "false"};')
-        elif type(element_value) == list:  # combobox modifier
+        elif isinstance(element_value, list):  # combobox modifier
             for i, item in enumerate(element_value):
                 S.append(f'    element.add(new Option("{item}","{i}"),undefined);')
         else:

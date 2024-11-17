@@ -81,16 +81,16 @@ class Scheduler:
             return False
 
         if operands == ["*"]:
-            operands = source_signals
+            operands = dest_signals
         if all([operand in source_signals for operand in operands]) is False:
             logging.error(f"check_job_parameters: Not all operands ({operands}) in source signals ({source_signals})")
             return False
 
-        if (len(dest_signals) == 1 or all([operand in dest_signals for operand in operands])) is False:
+        if (len(dest_signals) == 1 or all([operand in source_signals for operand in operands])) is False:
             logging.error(f"check_job_parameters: The result signals of the operation are ambiguous: destination: {dest_signals}, operands: {operands}")
             return False
 
-        if operation not in (Operation.AVG, Operation.INTEGRATE) and len(operands) != 1:
+        if operation not in (Operation.AVG, Operation.INTEGRATE, Operation.VALUE) and len(operands) != 1:
             logging.error(f"check_job_parameters: The operation {operation} requires exactly one operand, instead {len(operands)} are found")
             return False
 

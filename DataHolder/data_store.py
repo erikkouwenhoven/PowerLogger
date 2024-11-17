@@ -5,7 +5,7 @@ from DataHolder.storage import Storage
 
 class DataStore:
     """
-    Information holder on data store
+    Information holder for a Storage
     """
 
     def __init__(self, name: str, persistency: Persistency, lifespan: LifeSpan, signals: List[str],

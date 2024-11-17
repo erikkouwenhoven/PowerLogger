@@ -46,8 +46,7 @@ def make_handler_class(request_executor: RequestExecutor):
             "/show_data": (ResponseReturn.DATA, "get_readable_data"),
             "/shift_info": (ResponseReturn.DATA, "get_shift_info"),
             "/system_info": (ResponseReturn.DATA, "get_system_info"),
-            "/raw": (ResponseReturn.TEXT, "getRaw"),
-            "/dumpdata": (ResponseReturn.TEXT, "getRealtimeDatadump"),
+            "/raw": (ResponseReturn.TEXT, "get_raw"),
         }
 
         def __init__(self, *args, **kwargs):
