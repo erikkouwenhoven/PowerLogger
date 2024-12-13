@@ -8,6 +8,8 @@ from DataHolder.storage import Storage
 from DataHolder.data_store import DataStore
 from Utils.settings import Settings
 from Utils.unit_handling import unit_integrated, unit_differentiated
+from Utils.time_delay import next_time, center_time
+from Utils.magic_numbers import c_SECONDS_PER_HOUR
 
 
 class Processor:
@@ -104,26 +106,30 @@ class Processor:
 
         # Uitvoeren van operatie met aanmaak nieuw DataItem
         elif operation in (Operation.AVG, Operation.INTEGRATE, Operation.DIFF, Operation.VALUE):
-            assert (period := self.data_holder.data_store(dest).sampling_time_minutes)
+            assert (period := self.data_holder.data_store(dest).sampling_period)
             assert len(sources) == 1
             ref_storage = self.data_holder.data_store(sources[0]).data
             if operation != Operation.DIFF:
-                at_time = dest_end_time if dest_end_time is not None else datetime.now() - timedelta(minutes=period)
+                at_time = next_time(dest_end_time, period) if dest_end_time is not None else (
+                        datetime.now() - timedelta(minutes=period.to_minutes()))
             else:
                 at_time = dest_end_time + timedelta(
-                    minutes=period) if dest_end_time is not None else datetime.now() - timedelta(minutes=period)
+                    minutes=period.to_minutes()) if dest_end_time is not None else datetime.now() - timedelta(
+                    minutes=period.to_minutes())
             if operation in (Operation.AVG, Operation.INTEGRATE):
                 ref_storage.timestamp_range()
                 start_time = max(at_time, datetime.fromtimestamp(ref_storage.timestamp_range()[0]))
-                result_data_item = self.average_integrate(ref_storage, start_time, at_time + timedelta(minutes=period),
-                                                          operands, avg=operation == Operation.AVG)
+                end_time = next_time(start_time, period)
+                set_time = center_time(start_time, period)
+                result_data_item = self.average_integrate(ref_storage, start_time, end_time, set_time, operands,
+                                                          avg=operation == Operation.AVG)
             elif operation == Operation.DIFF:
                 assert len(operands) == 1
                 operand = operands[0]
                 assert operand in source_signals
                 assert len(dest_signals) == 1
                 result_data_item = self.differentiate(ref_storage, operand, dest_signals[0], at_time,
-                                                      timedelta(minutes=period))
+                                                      timedelta(minutes=period.to_minutes()))
             elif operation == Operation.VALUE:
                 storage = self.data_holder.data_store(sources[0]).data
                 data_item_spec = DataItemSpec({signal: storage.data_item_spec.get_unit(signal) for signal in operands})
@@ -138,8 +144,8 @@ class Processor:
                 operand_data_store.data.add_measurement(result_data_item)
 
     @staticmethod
-    def average_integrate(storage: Storage, from_time: datetime, to_time: datetime, selected_signals: List[str],
-                          avg=True) -> DataItem:
+    def average_integrate(storage: Storage, from_time: datetime, to_time: datetime, set_time: datetime,
+                          selected_signals: List[str], avg=True) -> DataItem:
         """
         Bepaalt van een selectie gespecificeerde signalen over een gegeven tijd het gemiddelde of de integraal.
         Het gemiddelde heeft dezelfde eenheid als het oorspronkelijke signaal en is de som van de signaalwaarden over
@@ -148,17 +154,17 @@ class Processor:
         integraal bepaald door de som van de signaalwaarden over het tijdsinterval gedeeld door aantal waarden maal
         lengte van tijdsinterval.
         """
-        data_item_spec = DataItemSpec({signal: storage.data_item_spec.get_unit(signal) if avg is True
-            else unit_integrated(storage.data_item_spec.get_unit(signal)) for signal in selected_signals})
-        timestamp = 0.5 * (datetime.timestamp(from_time) + datetime.timestamp(to_time))
-        sample = DataItem(data_item_spec, timestamp=timestamp)
-        hours = (to_time - from_time).total_seconds() / 3600
+        data_item_spec = DataItemSpec({signal: storage.data_item_spec.get_unit(signal) if avg is True else
+                            unit_integrated(storage.data_item_spec.get_unit(signal)) for signal in selected_signals})
+        sample = DataItem(data_item_spec, timestamp=datetime.timestamp(set_time))
+        hours = (to_time - from_time).total_seconds() / c_SECONDS_PER_HOUR
         logging.debug(f"{'avg' if avg is True else 'integrate'}: from = {from_time}, to = {to_time}, hours = {hours}, "
                       f"time = {datetime.fromtimestamp(sample.get_timestamp())}")
         for signal in selected_signals:
             cum_sum = 0.0
             cum_count = 0
-            for idx in storage.timed_indexes(storage.index_from_time(from_time), storage.index_from_time(to_time)):
+            for idx in storage.timed_indexes(storage.index_from_time(from_time), storage.index_from_time(to_time),
+                                             skip_first=True):
                 if (value := storage.get_data_item(idx).get_value(signal)) is not None:
                     cum_sum += value
                 cum_count += 1
@@ -198,7 +204,10 @@ class Processor:
             return None
         sample = DataItem(DataItemSpec({diff_signal: unit_differentiated(curr_item.get_unit(signal))}),
                           timestamp=at_time.timestamp())
-        sample.set_value(diff_signal, new - curr)
+        try:
+            sample.set_value(diff_signal, new - curr)
+        except TypeError:  # het is voorgekomen dat new = None, had te maken met het eerder missen van scheduled function
+            sample.set_value(diff_signal, None)
         return sample
 
     @staticmethod

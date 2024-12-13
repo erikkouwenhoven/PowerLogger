@@ -53,7 +53,6 @@ class RequestExecutor:
     def get_shift_info(*args):
         return {"shift in seconds": Settings().get_shift_in_seconds()}
 
-
     def get_system_info(self, *args):
         return SystemInfo(self.inquirer).get_info()
 

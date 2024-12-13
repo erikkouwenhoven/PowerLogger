@@ -153,11 +153,11 @@ class P1Sample:
 
     def __str__(self) -> str:
         if len(self.data) > 0:
-            S = f"{len(self.data)} data items\n"
+            s = f"{len(self.data)} data items\n"
             for item in self.data:
                 if self.data[item]:
                     unit_str = self.data[item].unit if self.data[item].unit else ""
-                    S += f"{item}: {self.data[item].value} {unit_str}\n"
-            return S
+                    s += f"{item}: {self.data[item].value} {unit_str}\n"
+            return s
         else:
             return ""

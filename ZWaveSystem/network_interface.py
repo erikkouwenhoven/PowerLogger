@@ -84,6 +84,6 @@ class NetworkInterface:
 
     @staticmethod
     def show_result(node: ZWaveNode, value: ZWaveValue):
-        S = f'{datetime.datetime.now()}: {node.node_id} {value.label} ({value.value_id}) {value.data} {value.units}'
+        s = f'{datetime.datetime.now()}: {node.node_id} {value.label} ({value.value_id}) {value.data} {value.units}'
         with open('output.txt', 'at') as file:
-            file.write(S + '\n')
+            file.write(s + '\n')

@@ -1,13 +1,19 @@
 from typing import List
 from datetime import datetime, timedelta
+from enum import Enum, auto
 import logging
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-from Scheduler.sched_attrs import JobTrigger, CronPeriodicity
+from Utils.time_delay import Period
 from Utils.settings import Settings
 from Application.Models.operation import Operation
 from Application.processor import Processor
 from Utils.time_delay import time_delay_minutes
+
+
+class JobTrigger(Enum):
+    PERIODIC = auto()
+    CRON = auto()
 
 
 class Scheduler:
@@ -45,10 +51,10 @@ class Scheduler:
                                       id=job_name)
                 else:
                     crontabs = {
-                        CronPeriodicity.HOURLY: "0 * * * *",
-                        CronPeriodicity.DAILY: "0 0 * * *",
-                        CronPeriodicity.MONTHLY: "0 0 1 * *",
-                        CronPeriodicity.YEARLY: "0 0 1 1 *",
+                        Period.HOUR: "0 * * * *",
+                        Period.DAY: "0 0 * * *",
+                        Period.MONTH: "0 0 1 * *",
+                        Period.YEAR: "0 0 1 1 *",
                     }
                     scheduler.add_job(self.exec_job,
                                       # 'cron',

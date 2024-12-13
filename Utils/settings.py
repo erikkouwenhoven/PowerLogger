@@ -5,7 +5,7 @@ import serial
 from DataHolder.buffer_attrs import Persistency, LifeSpan
 from P1System.p1_data_classes import P1DataType
 from Application.Models.operation import Operation
-from Scheduler.sched_attrs import CronPeriodicity
+from Utils.time_delay import Period
 
 
 class Settings:
@@ -71,9 +71,9 @@ class Settings:
         return LifeSpan.Circular if self.config.get('DATASTORAGE', data_store_id + '_lifespan') == "circular" \
             else LifeSpan.Linear
 
-    def get_data_store_sampling_time_minutes(self, data_store_id) -> Union[int, None]:
+    def get_data_store_sampling_period(self, data_store_id) -> Union[Period, None]:
         try:
-            return eval(self.config.get('DATASTORAGE', data_store_id + '_sampling_time_minutes'))
+            return Period[self.config.get('DATASTORAGE', data_store_id + '_sampling_period')]
         except configparser.NoOptionError:
             return None
 
@@ -111,12 +111,12 @@ class Settings:
         except configparser.NoOptionError:
             return None
 
-    def periodicity(self, job_id) -> Union[CronPeriodicity, None]:
+    def periodicity(self, job_id) -> Union[Period, None]:
         try:
             result_per = self.config.get('SCHEDULER', job_id + '_periodicity').upper()
         except configparser.NoOptionError:
             return None
-        return CronPeriodicity[result_per]
+        return Period[result_per]
 
     def sched_job_sources(self, job_id) -> List[str]:
         return self.config.get('SCHEDULER', job_id + '_sources').split()

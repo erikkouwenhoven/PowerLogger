@@ -92,7 +92,7 @@ class DataItem:
         unit, _ = self.data_item_spec.get_element(element)
         return unit
 
-    def set_value(self, element: str, value: float):
+    def set_value(self, element: str, value: float | None):
         data_type = self.data_item_spec.datatype_from_name(element)
         unit, idx = self.data_item_spec.get_element(data_type)
         self.item_data[idx + 1] = value
@@ -136,8 +136,8 @@ class DataItem:
         return array
 
     def __str__(self):
-        S = f"T = {self.get_timestamp_str()}"
+        s = f"T = {self.get_timestamp_str()}"
         for element in self.data_item_spec.get_elements():
             unit, idx = self.data_item_spec.get_element(element)
-            S += f"  {str(element)}: {self.item_data[idx + 1]} {unit}"
-        return S
+            s += f"  {str(element)}: {self.item_data[idx + 1]} {unit}"
+        return s

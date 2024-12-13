@@ -35,14 +35,14 @@ class Form:
             self.result.insert(position + iline, line)
 
     def update_element(self, element_id, element_value):
-        S = ['  <script type="text/javascript">',
+        s = ['  <script type="text/javascript">',
              f'    var element = document.getElementById("{element_id}");']
         if isinstance(element_value, bool):
-            S.append(f'    element.checked = {"true" if element_value is True else "false"};')
+            s.append(f'    element.checked = {"true" if element_value is True else "false"};')
         elif isinstance(element_value, list):  # combobox modifier
             for i, item in enumerate(element_value):
-                S.append(f'    element.add(new Option("{item}","{i}"),undefined);')
+                s.append(f'    element.add(new Option("{item}","{i}"),undefined);')
         else:
-            S.append(f'    element.innerHTML = "{element_value}";')
-        S.append('  </script>')
-        self.append(S)
+            s.append(f'    element.innerHTML = "{element_value}";')
+        s.append('  </script>')
+        self.append(s)

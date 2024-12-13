@@ -138,7 +138,7 @@ class CircularStorage(Storage, metaclass=ABCMeta):
     def __init__(self, num_elems: int, elems: List[str]):
         Storage.__init__(self, elems)
         self.num_elems = num_elems  # het aantal elementen gealloceerd voor de data
-        self.head = 0  # position in the data array of the next item
+        self.head = self.init_head_from_data()  # position in the data array of the next item
 
     def min_time_index(self) -> int:
         if self.length() < self.num_elems:
@@ -206,6 +206,26 @@ class CircularStorage(Storage, metaclass=ABCMeta):
             if abs(hi - lo) <= 1:
                 return lo if timestamp - self.get_data_item(lo).get_timestamp() < self.get_data_item(hi).get_timestamp() - timestamp else hi
 
+    def transition_index(self) -> Union[int, None]:
+        assert self.length() == self.num_elems
+        lo = 0
+        hi = self.num_elems - 1
+        if self.get_data_item(lo).get_timestamp() < self.get_data_item(hi).get_timestamp():
+            return lo
+        iteration = 0
+        while lo != hi:
+            iteration += 1
+            if iteration % 1000 == 0:
+                logging.debug(f"iter = {iteration}")
+                return 0
+            m = int((hi + lo) / 2)
+            if self.get_data_item(m).get_timestamp() < self.get_data_item(lo).get_timestamp():
+                hi = m
+            else:
+                lo = m
+            if hi == lo + 1:
+                return hi
+
     def get_prev_data_item(self, idx: int) -> DataItem:
         return self.get_data_item((idx - 1 + self.length()) % self.length())
 
@@ -225,6 +245,18 @@ class CircularStorage(Storage, metaclass=ABCMeta):
 
     def __str__(self) -> str:
         return "".join(self.dump())
+
+    def init_head_from_data(self) -> int:
+        head = 0
+        if 0 < self.length() < self.num_elems:
+            head = self.length()
+        else:
+            prev_time = self.get_data_item(0).get_timestamp()
+            for idx in range(self.length()):
+                if (next_time := self.get_data_item(idx + 1).get_timestamp()) < prev_time:
+                    head = idx + 1
+                prev_time = next_time
+        return head
 
 
 class LinearStorage(Storage, metaclass=ABCMeta):
@@ -349,8 +381,8 @@ class PersistentStorage(Storage, metaclass=ABCMeta):
 class CircularMemStorage(CircularStorage, MemStorage):
 
     def __init__(self, num_elems: int, elems: List[str]):
-        CircularStorage.__init__(self, num_elems, elems)
         MemStorage.__init__(self, elems)
+        CircularStorage.__init__(self, num_elems, elems)
 
 
 class CircularPersistentStorage(CircularStorage, PersistentStorage):
@@ -383,3 +415,4 @@ if __name__ == "__main__":
     res = buf.index_from_time(req)
     print(buf)
     print(f"res = {res} buf = {buf.data[res].get_timestamp()} req={datetime.timestamp(req)}")
+    print(f"transition at {buf.transition_index()}")
