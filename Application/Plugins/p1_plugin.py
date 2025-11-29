@@ -1,4 +1,4 @@
-from Application.plugin import Plugin, Publisher
+from Application.Plugins.plugin import Plugin, Publisher
 from P1System.p1_interface import P1Interface, P1Sample
 from DataHolder.storage import Storage
 from Utils.settings import Settings

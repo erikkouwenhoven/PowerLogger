@@ -1,4 +1,3 @@
-from typing import List, Union
 import logging
 from datetime import datetime, timedelta
 from Application.Models.operation import Operation
@@ -8,7 +7,7 @@ from DataHolder.storage import Storage
 from DataHolder.data_store import DataStore
 from Utils.settings import Settings
 from Utils.unit_handling import unit_integrated, unit_differentiated
-from Utils.time_delay import next_time, center_time
+from Utils.time_delay import round_time_on_period, center_time
 from Utils.magic_numbers import c_SECONDS_PER_HOUR
 
 
@@ -20,7 +19,7 @@ class Processor:
     def __init__(self, data_holder: DataHolder):
         self.data_holder = data_holder
 
-    def process_derived_signal(self, sources: List[str], dest: str, operation: Operation, operands: List[str]):
+    def process_derived_signal(self, sources: list[str], dest: str, operation: Operation, operands: list[str]):
         """
         De signalen van de bron data source worden in bewerkte vorm overgezet naar de destination data source. De tijd
         range waarover dat gebeurt wordt bepaald door wat er al aanwezig is in zowel source als destination. De tijdrange
@@ -55,15 +54,15 @@ class Processor:
 
         dest_end_time = self.data_holder.get_end_time(dest)
         logging.debug(f"dest_end_time = {dest_end_time}")
-        try:
-            src_end_time = min([self.data_holder.get_end_time(source) for source in sources
-                                if self.data_holder.get_end_time(source) is not None])
-        except ValueError:
-            src_end_time = None
+        # try:
+        #     src_end_time = min([self.data_holder.get_end_time(source) for source in sources
+        #                         if self.data_holder.get_end_time(source) is not None])
+        # except ValueError:
+        #     src_end_time = None
 
         operand_data_store: DataStore = self.data_holder.data_store(dest)
 
-        if len(sources) > 1:  # Merge
+        if len(sources) > 1:  # Merge meerdere data sources
             ref_storage = self.data_holder.data_store(sources[0]).data
             merged_data_item_spec = operand_data_store.data.data_item_spec
             for src in sources:
@@ -110,16 +109,15 @@ class Processor:
             assert len(sources) == 1
             ref_storage = self.data_holder.data_store(sources[0]).data
             if operation != Operation.DIFF:
-                at_time = next_time(dest_end_time, period) if dest_end_time is not None else (
-                        datetime.now() - timedelta(minutes=period.to_minutes()))
+                at_time = datetime.now()
             else:
                 at_time = dest_end_time + timedelta(
                     minutes=period.to_minutes()) if dest_end_time is not None else datetime.now() - timedelta(
                     minutes=period.to_minutes())
             if operation in (Operation.AVG, Operation.INTEGRATE):
-                ref_storage.timestamp_range()
+                # ref_storage.timestamp_range()
                 start_time = max(at_time, datetime.fromtimestamp(ref_storage.timestamp_range()[0]))
-                end_time = next_time(start_time, period)
+                end_time = round_time_on_period(start_time, period)
                 set_time = center_time(start_time, period)
                 result_data_item = self.average_integrate(ref_storage, start_time, end_time, set_time, operands,
                                                           avg=operation == Operation.AVG)
@@ -145,7 +143,7 @@ class Processor:
 
     @staticmethod
     def average_integrate(storage: Storage, from_time: datetime, to_time: datetime, set_time: datetime,
-                          selected_signals: List[str], avg=True) -> DataItem:
+                          selected_signals: list[str], avg=True) -> DataItem:
         """
         Bepaalt van een selectie gespecificeerde signalen over een gegeven tijd het gemiddelde of de integraal.
         Het gemiddelde heeft dezelfde eenheid als het oorspronkelijke signaal en is de som van de signaalwaarden over
@@ -177,7 +175,7 @@ class Processor:
 
     @staticmethod
     def differentiate(storage: Storage, signal: str, diff_signal: str, at_time: datetime, diff_time: timedelta) -> \
-            Union[DataItem, None]:
+            DataItem | None:
         """
         Geeft het verschil van een signaal op een gegeven moment en een delta tijd daarvoor
         :param storage: Storage die de data bevat
@@ -195,17 +193,17 @@ class Processor:
         else:
             logging.debug(f"differentiate: could not assess curr")
             return None
-        if new_item := storage.get_data_item(storage.index_from_time(at_time + diff_time)):
-            new = new_item.get_value(signal)
+        if prev_item := storage.get_data_item(storage.index_from_time(at_time - diff_time)):
+            prev = prev_item.get_value(signal)
             logging.debug(
-                f"differentiate: time = {at_time + diff_time} index = {storage.index_from_time(at_time + diff_time)} new = {new}")
+                f"differentiate: time = {at_time - diff_time} index = {storage.index_from_time(at_time - diff_time)} prev = {prev}")
         else:
-            logging.debug(f"differentiate: could not assess new")
+            logging.debug(f"differentiate: could not assess prev")
             return None
         sample = DataItem(DataItemSpec({diff_signal: unit_differentiated(curr_item.get_unit(signal))}),
                           timestamp=at_time.timestamp())
         try:
-            sample.set_value(diff_signal, new - curr)
+            sample.set_value(diff_signal, curr - prev)
         except TypeError:  # het is voorgekomen dat new = None, had te maken met het eerder missen van scheduled function
             sample.set_value(diff_signal, None)
         return sample

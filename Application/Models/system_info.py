@@ -1,4 +1,3 @@
-from typing import Dict
 import os
 import psutil
 from datetime import datetime
@@ -12,13 +11,13 @@ class SystemInfo:
         self.inquirer = inquirer
         self.info = self.get_info()
 
-    def get_info(self) -> Dict[str, str]:
+    def get_info(self) -> dict[str, str]:
         info = self.get_general_info()
         info = dict(info, **self.get_sys_info())
         info = dict(info, **self.get_app_info())
         return info
 
-    def get_general_info(self) -> Dict[str, str]:
+    def get_general_info(self) -> dict[str, str]:
         return {
             "Time start logging": str(self.inquirer.get_P1_start_time()),
             "Meter clock": str(self.inquirer.get_P1_clock()),
@@ -26,7 +25,7 @@ class SystemInfo:
         }
 
     @staticmethod
-    def get_sys_info() -> Dict[str, str]:
+    def get_sys_info() -> dict[str, str]:
         return {
             "Number of CPUs": psutil.cpu_count(),
             "CPU frequency": psutil.cpu_freq().current,
@@ -39,7 +38,7 @@ class SystemInfo:
         }
 
     @staticmethod
-    def get_app_info() -> Dict[str, str]:
+    def get_app_info() -> dict[str, str]:
         return {
             "Database": DBInterface.db_file_name(),
             "Size of database (bytes)": os.path.getsize(DBInterface.db_file_name()),

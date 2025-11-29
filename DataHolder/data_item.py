@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import Union, List
+
+import logging
 from datetime import datetime
 
 
@@ -51,9 +52,11 @@ class DataItemSpec:
                         if unit is None:
                             self.elements[data_type] = other_unit, idx  # take over the unit, maintain the index
                         else:
+                            if unit != other_unit:
+                                logging.critical(f"PANIC! unit={unit} other_unit={other_unit}")
                             assert unit == other_unit
 
-    def get_elements(self) -> List[str]:
+    def get_elements(self) -> list[str]:
         return [data_type for data_type in self.elements]
 
     def get_element(self, data_type: str) -> tuple[str, int]:
@@ -68,7 +71,7 @@ class DataItemSpec:
                 return data_type
 
     @classmethod
-    def from_names(cls, names: List[str]):
+    def from_names(cls, names: list[str]):
         return cls({name: None for name in names})
 
 
@@ -77,7 +80,7 @@ class DataItem:
 
     def __init__(self, data_item_spec: DataItemSpec, timestamp: float = None):
         self.data_item_spec: DataItemSpec = data_item_spec
-        self.item_data: List[float | None] = [None] * (len(data_item_spec.get_elements()) + 1)
+        self.item_data: list[float | None] = [None] * (len(data_item_spec.get_elements()) + 1)
         self.item_data[0] = timestamp
 
     def get_value(self, element: str) -> float:
@@ -110,7 +113,7 @@ class DataItem:
     def get_timestamp(self) -> float:
         return self.item_data[0]
 
-    def get_timestamp_str(self) -> str:
+    def get_timestamp_str(self) -> str | None:
         if self.item_data[0] is not None:
             return datetime.fromtimestamp(self.item_data[0]).strftime("%d-%m-%Y, %H:%M:%S")
 
@@ -118,7 +121,7 @@ class DataItem:
         return all([self.item_data[idx] == 0.0 for idx in range(1, len(self.item_data))])
 
     @classmethod
-    def from_array(cls, array: List[float], data_item_spec: DataItemSpec):
+    def from_array(cls, array: list[float], data_item_spec: DataItemSpec):
         data_item = cls(data_item_spec, timestamp=array[0])
         for i, element in enumerate(data_item_spec.get_elements()):
             unit, idx = data_item_spec.get_element(element)
@@ -126,7 +129,7 @@ class DataItem:
                 data_item.item_data[idx + 1] = value
         return data_item
 
-    def to_array(self, selected_signals: Union[List[str], None] = None) -> List[float | None]:
+    def to_array(self, selected_signals: list[str] | None = None) -> list[float | None]:
         signals = self.data_item_spec.get_elements() if selected_signals is None else selected_signals
         array = [None] * (len(signals) + 1)
         array[0] = self.item_data[0]

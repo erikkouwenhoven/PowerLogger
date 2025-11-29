@@ -25,10 +25,10 @@ class HomeForm(Form):
 
         if p1_recent := self.inquirer.get_recent_data("P1", ["CURRENT_USAGE", "CURRENT_PRODUCTION"]):
             self.update_element("last_P1_meas", time_ago(p1_recent[0]))
-            self.update_element("Usage", f"CURRENT_USAGE {p1_recent[1]}")
-            self.update_element("Production", f"CURRENT_PRODUCTION {p1_recent[2]}")
+            self.update_element("Usage", f"CURRENT_USAGE {p1_recent[1]["CURRENT_USAGE"][0]} {p1_recent[1]["CURRENT_USAGE"][1]}")
+            self.update_element("Production", f"CURRENT_PRODUCTION {p1_recent[1]["CURRENT_PRODUCTION"][0]} {p1_recent[1]["CURRENT_PRODUCTION"][1]}")
         if solar_recent := self.inquirer.get_recent_data("Solar", ["SOLAR"]):
             self.update_element("last_Solar_meas", time_ago(solar_recent[0]))
-            self.update_element("Solar", solar_recent[1])
+            self.update_element("Solar", f"{solar_recent[1]["SOLAR"][0]} {solar_recent[1]["SOLAR"][1]}")
         self.update_element("data_stores", self.inquirer.data_holder.get_data_stores())
         return self.result

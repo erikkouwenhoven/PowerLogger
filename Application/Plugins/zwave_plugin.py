@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-from Application.plugin import Plugin, Publisher
+from Application.Plugins.plugin import Plugin, Publisher
 from ZWaveSystem.zwave_interface import ZWaveInterface
 from openzwave.node import ZWaveNode
 from openzwave.value import ZWaveValue

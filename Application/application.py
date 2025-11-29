@@ -1,8 +1,8 @@
 from Utils.settings import Settings
-from Application.plugin import Publisher
+from Application.Plugins.plugin import Publisher
 from Application.Plugins.p1_plugin import P1Plugin
 from Application.Plugins.sma_plugin import SMAPlugin
-from Application.Plugins.zwave_plugin import ZWavePlugin
+# from Application.Plugins.zwave_plugin import ZWavePlugin
 from Application.processor import Processor
 from Application.inquirer import Inquirer
 from DataHolder.data_holder import DataHolder
@@ -28,7 +28,7 @@ class Application(Publisher):
         # assign to variable to prevent removal by garbage collector
         p1_plugin = P1Plugin(self, self.data_holder.data_store(Settings().get_P1_data_store()).data)
         sma_plugin = SMAPlugin(self, self.data_holder.data_store(Settings().get_SMA_data_store()).data)
-        zwave_plugin = ZWavePlugin(self, self.data_holder.data_store(Settings().get_ZWave_data_store()).data)
+        # zwave_plugin = ZWavePlugin(self, self.data_holder.data_store(Settings().get_ZWave_data_store()).data)
 
         self.inquirer = Inquirer(self.data_holder, self.get_plugins())
         self.webServer = ThreadedServer(self.inquirer)

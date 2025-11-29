@@ -1,4 +1,3 @@
-from typing import List, Union, Dict
 from Utils.time_delay import Period
 from DataHolder.buffer_attrs import Persistency, LifeSpan
 from DataHolder.storage import Storage
@@ -9,7 +8,7 @@ class DataStore:
     Information holder for a Storage
     """
 
-    def __init__(self, name: str, persistency: Persistency, lifespan: LifeSpan, signals: List[str],
+    def __init__(self, name: str, persistency: Persistency, lifespan: LifeSpan, signals: list[str],
                  sampling_period: Period = None, buf_len: int = 0, db: str = None):
         self.name = name
         self.persistency = persistency
@@ -22,9 +21,9 @@ class DataStore:
             assert self.db is not None
         if self.lifespan == LifeSpan.Circular:
             assert self.buf_len > 0
-        self.data: Union[Storage, None] = None
+        self.data: Storage | None = None
 
-    def data_store_info(self) -> Dict[str, any]:
+    def data_store_info(self) -> dict[str, any]:
         return {
             "Name": self.name,
             "Persistency": self.persistency.name,

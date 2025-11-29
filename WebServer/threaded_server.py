@@ -44,6 +44,7 @@ def make_handler_class(request_executor: RequestExecutor):
             "/data_store_info": (ResponseReturn.DATA, "get_data_store_info"),
             "/get_data": (ResponseReturn.DATA, "get_compact_data"),
             "/show_data": (ResponseReturn.DATA, "get_readable_data"),
+            "/performance_info": (ResponseReturn.DATA, "get_performance_info"),
             "/shift_info": (ResponseReturn.DATA, "get_shift_info"),
             "/system_info": (ResponseReturn.DATA, "get_system_info"),
             "/raw": (ResponseReturn.TEXT, "get_raw"),

@@ -1,6 +1,7 @@
 import os
-from typing import List, Union, Tuple, Dict
 import configparser
+from typing import Any, Type
+
 import serial
 from DataHolder.buffer_attrs import Persistency, LifeSpan
 from P1System.p1_data_classes import P1DataType
@@ -44,11 +45,11 @@ class Settings:
     def rs232_bytesize(self):
         return eval(self.config.get('RS232', 'bytesize'))
 
-    def get_measurement_p1_signals(self) -> List[P1DataType]:
-        signals: List[str] = self.config.get('DATARETRIEVAL', 'p1_signals').split()
+    def get_measurement_p1_signals(self) -> list[Type[P1DataType]]:
+        signals: list[str] = self.config.get('DATARETRIEVAL', 'p1_signals').split()
         return [P1DataType[signal] for signal in signals]
 
-    def get_data_stores(self) -> List[str]:
+    def get_data_stores(self) -> list[str]:
         return self.config.get('DATASTORAGE', 'data_stores').split()
 
     def get_P1_data_store(self):
@@ -71,13 +72,13 @@ class Settings:
         return LifeSpan.Circular if self.config.get('DATASTORAGE', data_store_id + '_lifespan') == "circular" \
             else LifeSpan.Linear
 
-    def get_data_store_sampling_period(self, data_store_id) -> Union[Period, None]:
+    def get_data_store_sampling_period(self, data_store_id) -> Type[Period] | None:
         try:
             return Period[self.config.get('DATASTORAGE', data_store_id + '_sampling_period')]
         except configparser.NoOptionError:
             return None
 
-    def get_data_store_signals(self, data_store_id) -> List[str]:
+    def get_data_store_signals(self, data_store_id) -> list[str]:
         return self.config.get('DATASTORAGE', data_store_id + '_signals').split()
 
     def get_data_store_buflen(self, data_store_id) -> int:
@@ -89,17 +90,17 @@ class Settings:
     def get_min_storage_time_diff_seconds(self) -> int:
         return int(self.config.get('DATASTORAGE', 'min_storage_time_diff_seconds'))
 
-    def scheduled_jobs(self) -> List[str]:
+    def scheduled_jobs(self) -> list[str]:
         return self.config.get('SCHEDULER', 'scheduled_jobs').split()
 
-    def interval_minutes(self, job_id) -> Union[int, None]:
+    def interval_minutes(self, job_id) -> int | None:
         try:
             result_str = self.config.get('SCHEDULER', job_id + '_interval_minutes')
         except configparser.NoOptionError:
             return None
         return eval(result_str)
 
-    def start_at_time(self, job_id) -> Union[str, None]:
+    def start_at_time(self, job_id) -> str | None:
         """
         Optionele parameter, indien niet ingevuld wordt None geretourneerd.
         Geeft de tijd van de dag aan waarop de job moet starten in de vorm van hh:mm.
@@ -111,20 +112,20 @@ class Settings:
         except configparser.NoOptionError:
             return None
 
-    def periodicity(self, job_id) -> Union[Period, None]:
+    def periodicity(self, job_id) -> Type[Period] | None:
         try:
             result_per = self.config.get('SCHEDULER', job_id + '_periodicity').upper()
         except configparser.NoOptionError:
             return None
         return Period[result_per]
 
-    def sched_job_sources(self, job_id) -> List[str]:
+    def sched_job_sources(self, job_id) -> list[str]:
         return self.config.get('SCHEDULER', job_id + '_sources').split()
 
     def sched_job_destination(self, job_id) -> str:
         return self.config.get('SCHEDULER', job_id + '_destination')
 
-    def sched_job_operation(self, job_id) -> Tuple[Operation, List[str]]:
+    def sched_job_operation(self, job_id) -> tuple[Type[Operation], list[str] | list[Any]]:
         """
         Geeft een Operation en operand terug.
         De operand heeft de vorm:
@@ -141,6 +142,7 @@ class Settings:
         else:
             operand = res[1:]
         return operation, operand
+
 
     def data_dir_name(self) -> str:
         return self.config.get('PATHS', 'data')
@@ -172,7 +174,7 @@ class Settings:
         else:
             return self.config.get('ZWAVE', 'device_linux')
 
-    def get_zwave_subscriptions(self) -> Dict[int, List[str]]:
+    def get_zwave_subscriptions(self) -> dict[int, list[str]]:
         res = {}
         for subscr in self.config.get('ZWAVE', 'subscriptions').split('\n'):
             split_res = subscr.split(':')

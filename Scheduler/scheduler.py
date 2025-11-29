@@ -1,4 +1,3 @@
-from typing import List
 from datetime import datetime, timedelta
 from enum import Enum, auto
 import logging
@@ -74,7 +73,7 @@ class Scheduler:
                                               operation=kwargs['operation'],
                                               operands=kwargs['operand'])
 
-    def check_job_parameters(self, sources: List[str], dest: str, operation: Operation, operands: List[str]) -> bool:
+    def check_job_parameters(self, sources: list[str], dest: str, operation: Operation, operands: list[str]) -> bool:
         for data_store in sources + [dest]:
             if self.processor.data_holder.data_store(data_store) is None:
                 logging.error(f"check_job_parameters: Data store {data_store} is unknown")

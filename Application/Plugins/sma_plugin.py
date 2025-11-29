@@ -1,4 +1,4 @@
-from Application.plugin import Plugin, Publisher
+from Application.Plugins.plugin import Plugin, Publisher
 from datetime import datetime
 from SMASystem.sma_interface import SMAInterface, SMADataType
 from DataHolder.storage import Storage

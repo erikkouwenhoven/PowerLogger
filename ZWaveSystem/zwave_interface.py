@@ -1,4 +1,3 @@
-from typing import Dict, List, Union
 import logging
 from ZWaveSystem.network_interface import NetworkInterface
 from openzwave.node import ZWaveNode
@@ -10,9 +9,9 @@ class ZWaveInterface:
     def __init__(self, post_sample_cb: callable((ZWaveNode, ZWaveValue))):
         self.post_sample_CB = post_sample_cb
         self.network_interface = NetworkInterface(self._value_received_cb)  # als je dit een lokale var. leidt dit tot access violation
-        self.subscriptions: Union[Dict[int, List[str]], None] = None  # registered node-valueIDs that are called back
+        self.subscriptions: dict[int, list[str]] | None = None  # registered node-valueIDs that are called back
 
-    def register(self, subscriptions: Union[Dict[int, List[str]], None]):
+    def register(self, subscriptions: dict[int, list[str]] | None):
         self.subscriptions = subscriptions
 
     def _value_received_cb(self, z_wave_node: ZWaveNode, z_wave_value: ZWaveValue):

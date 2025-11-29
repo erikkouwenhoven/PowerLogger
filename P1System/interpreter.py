@@ -1,5 +1,4 @@
 import logging
-from typing import Union, List
 from datetime import datetime
 from P1System.p1_data_classes import P1DataType, P1Sample
 from P1System.p1_data_classes import P1Value
@@ -40,17 +39,17 @@ class Interpreter:
     def __init__(self, serial_settings: SerialSettings):
         self.reader: SerialReader = SerialReader(serial_settings)
         self._stop_running: bool = False
-        self._raw_lines: List[bytes] = []
-        self.start_time: Union[datetime, None] = None
-        self.num_samples: Union[int, None] = None
-        self.sampling_period: Union[float, None] = None
+        self._raw_lines: list[bytes] = []
+        self.start_time: datetime | None = None
+        self.num_samples: int | None = None
+        self.sampling_period: float | None = None
 
     def sync_sample(self):
         line = self.reader.get_line()
         while line and self.startTelegram not in line:
             line = self.reader.get_line()
 
-    def get_sample(self, requested_values: List[P1DataType]) -> Union[P1Sample, None]:
+    def get_sample(self, requested_values: list[P1DataType]) -> P1Sample | None:
         sample = P1Sample(requested_values)
         if line := self.reader.get_line():
             self._raw_lines.clear()
@@ -63,7 +62,7 @@ class Interpreter:
                 line = self.reader.get_line()
             return sample
 
-    def run_continuously(self, requested_values: List[P1DataType], post_sample_cb: callable(P1Sample)):
+    def run_continuously(self, requested_values: list[P1DataType], post_sample_cb: callable(P1Sample)):
         logging.info(f"Start continuous sampling for values {requested_values}")
         self._stop_running = False
         self.start_time = datetime.now()
@@ -77,7 +76,7 @@ class Interpreter:
     def stop_running(self):
         self._stop_running = True
 
-    def decode(self, line: bytes, requested_values: List[P1DataType]) -> (bool, float):
+    def decode(self, line: bytes, requested_values: list[P1DataType]) -> (bool, float):
         if self.startTelegram in line:
             return True, None
         else:
@@ -99,7 +98,7 @@ class Interpreter:
         return False, None
 
     @staticmethod
-    def second_value(line: bytes, bracket_open: int) -> bytes:
+    def second_value(line: bytes, bracket_open: int) -> bytes | None:
         if (bracket_open_2 := line.find(b'(')) != bracket_open:
             bracket_close_2 = line.find(b')')
             return line[bracket_open_2 + 1:bracket_close_2]
@@ -129,7 +128,7 @@ class Interpreter:
             ret_val.set_extra_timestamp(extra)
         return ret_val
 
-    def get_raw_lines(self) -> List[bytes]:
+    def get_raw_lines(self) -> list[bytes]:
         return self._raw_lines
 
     def get_sampling_period(self, update: bool = False) -> float:

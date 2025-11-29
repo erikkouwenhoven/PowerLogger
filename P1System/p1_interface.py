@@ -1,4 +1,3 @@
-from typing import Union, List
 from P1System.p1_data_classes import P1Sample
 from P1System.interpreter import Interpreter
 from P1System.serial_settings import SerialSettings
@@ -44,14 +43,14 @@ class P1Interface:
             getSample():            returns latest sample
     """
 
-    def __init__(self, p1_value_types: List[P1DataType], external_post_sample_cb: callable(P1Sample)):
-        self.reqValues: List[P1DataType] = P1DataType.all_poss() if p1_value_types is None else p1_value_types
+    def __init__(self, p1_value_types: list[P1DataType], external_post_sample_cb: callable(P1Sample)):
+        self.reqValues: list[P1DataType] = P1DataType.all_poss() if p1_value_types is None else p1_value_types
         self.external_post_sample_cb = external_post_sample_cb
         self.interpreter = Interpreter(SerialSettings())
-        self.current_sample: Union[P1Sample, None] = None
-        self.interval: Union[float, None] = None
+        self.current_sample: P1Sample | None = None
+        self.interval: float | None = None
 
-    def start(self, interval: Union[float, None] = None):
+    def start(self, interval: float | None = None):
         self.interval = interval
         self.interpreter.sync_sample()
         self.interpreter.run_continuously(self.reqValues, self._sample_complete)
@@ -67,7 +66,7 @@ class P1Interface:
     def get_current_sample(self) -> P1Sample:
         return self.current_sample
 
-    def get_raw_lines(self) -> List[bytes]:
+    def get_raw_lines(self) -> list[bytes]:
         return self.interpreter.get_raw_lines()
 
     def _sample_complete(self, sample: P1Sample) -> None:
