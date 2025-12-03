@@ -143,7 +143,6 @@ class Settings:
             operand = res[1:]
         return operation, operand
 
-
     def data_dir_name(self) -> str:
         return self.config.get('PATHS', 'data')
 
@@ -158,6 +157,12 @@ class Settings:
 
     def get_shift_in_seconds(self) -> float:
         return float(self.config.get('PROCESSING', 'shift_in_seconds'))
+
+    def derived_signals(self) -> list[str]:
+        return self.config.get('PROCESSING', 'derived_signals').split()
+
+    def get_derived_signal_dependency(self, signal: str) -> list[str]:
+        return self.config.get('PROCESSING', signal + '_dependency').split()
 
     def get_config(self):
         if os.name == 'nt':

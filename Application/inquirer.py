@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Type
 from Application.domain_rules import solar_efficiency, Grid3phases
 from DataHolder.buffer_attrs import Persistency
 from DataHolder.data_holder import DataHolder
@@ -37,12 +38,12 @@ class Inquirer:
             if last_data_item := data_store.data.get_data_item(data_store.data.last_index()):
                 return last_data_item.get_timestamp(), {signal: (last_data_item.get_value(signal), last_data_item.get_unit(signal)) for signal in signals}
 
-    def get_summed_data(self, data_store_name: str, signals: list[str], period: Period) -> tuple[float, list[str]] | None:
+    def get_summed_data(self, data_store_name: str, signals: list[str], period: Type[Period]) -> tuple[float, dict[str, tuple[float, str]]] | None:
         if data_store := self.data_holder.data_store(data_store_name):
             data_item = Processor.average_integrate(data_store.data, period.start_time(), datetime.now(), datetime.now(), signals, avg=False)
-            return data_item.get_timestamp(), [data_item.get_value_and_unit(signal) for signal in signals]
+            return data_item.get_timestamp(), {signal: (data_item.get_value(signal), data_item.get_unit(signal)) for signal in signals}
 
-    def get_performance_info(self, period: Period | None) -> tuple[float | None, float | None, float | None]:
+    def get_performance_info(self, period: Period | None) -> tuple[float | None, Grid3phases | None, float | None]:
         """
         Geeft de volgende data
             zon
@@ -73,8 +74,7 @@ class Inquirer:
         if res:
             solar_value = res[1][solar_signals[0]][0]
 
-        signals = ['CURRENT_USAGE_PHASE1', 'CURRENT_USAGE_PHASE2', 'CURRENT_USAGE_PHASE3',
-                   'CURRENT_PRODUCTION_PHASE1', 'CURRENT_PRODUCTION_PHASE2', 'CURRENT_PRODUCTION_PHASE3']
+        signals = ['NET_USAGE', 'NET_PRODUCTION']
         if period is None:
             if signals_data_store := self.data_holder.filter(signals, req_persistency=Persistency.Volatile):
                 res = self.get_recent_data(signals_data_store.name, signals)
@@ -86,15 +86,11 @@ class Inquirer:
             else:
                 res = None
         if res:
-            grid_3phases = Grid3phases(usage_1 = res[1]['CURRENT_USAGE_PHASE1'][0],
-                                   usage_2 = res[1]['CURRENT_USAGE_PHASE2'][0],
-                                   usage_3 = res[1]['CURRENT_USAGE_PHASE3'][0],
-                                   prod_1 = res[1]['CURRENT_PRODUCTION_PHASE1'][0],
-                                   prod_2 = res[1]['CURRENT_PRODUCTION_PHASE2'][0],
-                                   prod_3 = res[1]['CURRENT_PRODUCTION_PHASE3'][0])
+            grid_3phases = Grid3phases(current_usage = res[1]['NET_USAGE'][0],
+                                   current_production = res[1]['NET_PRODUCTION'][0])
         if solar_value and grid_3phases:
-            solar_eff = solar_efficiency(solar_value, grid_3phases.net_balance)
-        return solar_value, grid_3phases.net_balance, solar_eff
+            solar_eff = solar_efficiency(solar_value, grid_3phases)
+        return solar_value, grid_3phases, solar_eff
 
     def get_P1_interface(self):
         for plugin in self.plugins:

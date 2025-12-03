@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime, timedelta
 from Application.Models.operation import Operation
+from Application.domain_rules import Grid3phases
 from DataHolder.data_item import DataItemSpec, DataItem
 from DataHolder.data_holder import DataHolder
 from DataHolder.storage import Storage
@@ -67,6 +68,14 @@ class Processor:
             merged_data_item_spec = operand_data_store.data.data_item_spec
             for src in sources:
                 merged_data_item_spec.take_over_units(self.data_holder.data_store(src).data.data_item_spec)
+            for item in merged_data_item_spec.get_elements():
+                if item in Settings().derived_signals():
+                    dependents = Settings().get_derived_signal_dependency(item)
+                    assert len(dependents) > 0
+                    dependent = dependents[0]
+                    assert dependent in merged_data_item_spec.get_elements()
+                    merged_data_item_spec.set_unit(item, merged_data_item_spec.get_unit(dependent))
+
             i_updates = ref_storage.timed_indexes(ref_storage.index_from_time(dest_end_time), None,
                                                   skip_first=True)  # Geen dubbelingen bij aansluiting
             for i_update in i_updates:
@@ -81,6 +90,8 @@ class Processor:
                                 src_data_item = self.data_holder.data_store(src).data.get_data_item(i_update)
                                 val = src_data_item.get_value(item)
                             merged_data_item.set_value(item, val)
+                    if item in Settings().derived_signals():
+                        merged_data_item.set_value(item, self.derive(item, ref_storage, i_update))  # let op, aanname is dat afgeleide signalen afhangen van signalen in de ref_storage!
                 operand_data_store.data.add_measurement(merged_data_item)
                 logging.info(f"Merged {merged_data_item}")
 
@@ -219,3 +230,14 @@ class Processor:
         :return: De signaalwaarde op het verschoven tijdstip
         """
         return storage.get_interpolated_value(at_timestamp + shift_in_seconds, signal)
+
+    @staticmethod
+    def derive(signal: str, src: Storage, i_update: int) -> float | None:
+        dependents = Settings().get_derived_signal_dependency(signal)
+        src_data_item = src.get_data_item(i_update)
+        values = {signal_name: src_data_item.get_value(signal_name) for signal_name in dependents}
+        match signal:
+            case "NET_USAGE":
+                return Grid3phases(values['CURRENT_USAGE'], values['CURRENT_PRODUCTION']).net_consumption
+            case "NET_PRODUCTION":
+                return Grid3phases(values['CURRENT_USAGE'], values['CURRENT_PRODUCTION']).net_production

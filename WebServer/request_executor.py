@@ -24,13 +24,13 @@ class RequestExecutor:
     def get_compact_data(self, args):
         return self.get_data(args, human_readable=False)
 
-    def get_performance_info(self) -> list[str]:
+    def get_performance_info(self, args) -> list[str]:
         """
         Geeft de volgende data
             zon
-            zon-efficientie
             terugleveren
             afnemen
+            zon-efficientie
         van de volgende periodes
             VALUE
             SUM HOUR
@@ -40,9 +40,9 @@ class RequestExecutor:
         """
         result: list[str] = []
         perf_value = self.inquirer.get_performance_info(None)
-        result.append(f"Now:      {perf_value[0]}      {perf_value[1]}      {perf_value[2]}")
+        result.append(f"Now:      {perf_value[0]:.1f}      {perf_value[1].net_consumption:.1f}      {perf_value[1].net_production:.1f}      {perf_value[2]:.2f}")
         hour_value = self.inquirer.get_performance_info(Period.HOUR)
-        result.append(f"Hour:     {hour_value[0]}      {hour_value[1]}      {hour_value[2]}")
+        result.append(f"Hour:     {hour_value[0]:.1f}      {hour_value[1].net_consumption:.1f}      {hour_value[1].net_production:.1f}      {hour_value[2]:.2f}")
         return result
 
     def get_data(self, args, human_readable) -> dict | None:

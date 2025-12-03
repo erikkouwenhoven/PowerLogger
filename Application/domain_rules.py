@@ -3,13 +3,8 @@ from dataclasses import dataclass
 
 @dataclass
 class Grid3phases:
-    usage_1: float
-    usage_2: float
-    usage_3: float
-    prod_1: float
-    prod_2: float
-    prod_3: float
-
+    current_usage: float
+    current_production: float
     """
     Bepaalt de netto productie/consumptie.
     Positief: er wordt netto afgenomen
@@ -17,7 +12,7 @@ class Grid3phases:
     """
     @property
     def net_balance(self) -> float:
-        return self.usage_1 + self.usage_2 + self.usage_3 - self.prod_1 - self.prod_2 - self.prod_3
+        return self.current_usage - self.current_production
 
     @property
     def net_consumption(self) -> float:
@@ -28,9 +23,8 @@ class Grid3phases:
         return -self.net_balance if self.net_balance < 0.0 else 0.0
 
 
-def solar_efficiency(solar_value: float, net_balance: float) -> float:
+def solar_efficiency(solar_value: float, grid_3phases: Grid3phases) -> float:
     """
     Geeft de fractie zon die nuttig wordt ingezet
     """
-    production = 0.0 if net_balance >= 0.0 else -net_balance
-    return (solar_value - production) / solar_value
+    return (solar_value - grid_3phases.net_production) / solar_value

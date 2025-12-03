@@ -81,7 +81,7 @@ class Scheduler:
 
         source_signals = [signal for source in sources for signal in self.processor.data_holder.data_store(source).signals]
         dest_signals = [signal for signal in self.processor.data_holder.data_store(dest).signals]
-        if all([dest_signal in source_signals for dest_signal in dest_signals]) is False and operation is not Operation.DIFF:
+        if all([dest_signal in source_signals + Settings().derived_signals() for dest_signal in dest_signals]) is False and operation is not Operation.DIFF:
             logging.error(f"check_job_parameters: Not all destination signals ({dest_signals}) in source signals ({source_signals})")
             return False
 
