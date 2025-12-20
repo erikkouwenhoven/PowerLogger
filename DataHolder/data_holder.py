@@ -1,10 +1,11 @@
+from typing import Any
+import logging
 from datetime import datetime
 from Utils.settings import Settings
 from DataHolder.storage import CircularMemStorage, CircularPersistentStorage, LinearPersistentStorage
 from DataHolder.db_interface import DBInterface
 from DataHolder.buffer_attrs import Persistency, LifeSpan
 from DataHolder.data_store import DataStore
-from Utils.time_delay import Period
 
 
 class DataHolder:
@@ -15,7 +16,7 @@ class DataHolder:
     def __init__(self):
         self.data_stores: list[DataStore] = self.init_data_stores()
 
-    def get_timerange(self, data_store_name: str):
+    def get_timerange(self, data_store_name: str) -> list[float] | None:
         return self.data_store(data_store_name).data.timestamp_range()
 
     def get_begin_time(self, data_store_name: str) -> datetime | None:
@@ -60,10 +61,32 @@ class DataHolder:
     def get_data_stores(self) -> list[str]:
         return [data_store.name for data_store in self.data_stores]
 
-    def filter(self, specific_signals: list[str], req_time_span: Period | None = None,
-               req_persistency: Persistency | None = None) -> DataStore | None:
+    def filter(self, specific_signals: list[str], requirements: dict[str, Any] | None = None) -> DataStore | None:
+        """
+        Geeft een datastore die aan de eisen voldoet:
+            bevat de signalen in specific_signals
+            voldoet aan requirements, een dict met optionele extra eisen
+                Time_span: Period De gevraagde datastore omvat deze tijdsspanne
+                Persistency: Persistency van de datastore
+        """
+        result: dict[DataStore, bool] = {}
         for data_store in self.data_stores:
-            if req_persistency is None or data_store.persistency == req_persistency:
-                if all([specific_signal in data_store.signals for specific_signal in specific_signals]):
-                    if req_time_span is None or ((ts_range := data_store.data.timestamp_range()) and req_time_span.is_contained(ts_range[1] - ts_range[0])):
-                        return data_store
+            result[data_store] = True
+            if all([specific_signal in data_store.signals for specific_signal in specific_signals]):
+                if requirements:
+                    if "Persistency" in requirements:
+                        if data_store.persistency != requirements["Persistency"]:
+                            result[data_store] = False
+                    if "Time_span" in requirements:
+                        if ts_range := data_store.data.timestamp_range():
+                            if requirements["Time_span"].is_contained(timerange_secs = ts_range[1] - ts_range[0]) is False:
+                                result[data_store] = False
+                        else:
+                            result[data_store] = False
+            else:
+                result[data_store] = False
+        logging.debug(f"De volgende data stores: {[data_store.name for data_store in result if result[data_store]]} voldoen aan"
+                      f"de eisen: bevat de signalen {specific_signals}, en verder nog {requirements}")
+        for data_store in result:
+            if result[data_store]:
+                return data_store

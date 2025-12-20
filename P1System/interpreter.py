@@ -81,15 +81,12 @@ class Interpreter:
             return True, None
         else:
             reset = False
-#        print("Decode request for line {}".format(line))
-#        print(f"obisCode: {self.obisCode}")
         for req in requested_values:
             if req in self.obisCode:
                 pos = line.find(self.obisCode[req])
                 if pos != -1:
                     bracket_open = line.rfind(b'(', pos)  # Last occurrence, for gas
                     bracket_close = line.rfind(b')', pos)
-    #                print("haakje open {} haakje dicht {}".format(bracketOpen, bracketClose))
                     if bracket_open != -1 and bracket_close != -1:
                         value = self.decode_value(req, line[bracket_open + 1:bracket_close],
                                                   self.second_value(line, bracket_open))

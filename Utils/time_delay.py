@@ -25,17 +25,19 @@ class Period(Enum):
         else:
             raise NotImplementedError
 
-    def start_time(self, end_time: datetime = datetime.now()) -> datetime:
+    def start_time(self, end_time: datetime | None = None) -> datetime:
         try:
+            if end_time is None:
+                end_time = datetime.now()
             return end_time - timedelta(minutes=self.to_minutes())
         except NotImplementedError:
             return round_time_on_period(end_time, self, round_up=False)
 
     def is_contained(self, timerange_secs: float) -> bool:
         try:
-            return self.to_minutes() * c_SECONDS_PER_MINUTE > timerange_secs
+            return timerange_secs > self.to_minutes() * c_SECONDS_PER_MINUTE
         except NotImplementedError:
-            return (datetime.now() - self.start_time()).total_seconds() > timerange_secs
+            return timerange_secs > (datetime.now() - self.start_time()).total_seconds()
 
 
 def time_delay_minutes(time_str: str) -> int | None:

@@ -67,7 +67,6 @@ class Scheduler:
         self.scheduler.print_jobs(out=logging.StreamHandler().stream)
 
     def exec_job(self, **kwargs):
-        print(f"exec_job {kwargs['id']}")
         self.processor.process_derived_signal(sources=kwargs['sources'],
                                               dest=kwargs['dest'],
                                               operation=kwargs['operation'],

@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime, timedelta
+from itertools import combinations
 from Application.Models.operation import Operation
 from Application.domain_rules import Grid3phases
 from DataHolder.data_item import DataItemSpec, DataItem
@@ -7,7 +8,7 @@ from DataHolder.data_holder import DataHolder
 from DataHolder.storage import Storage
 from DataHolder.data_store import DataStore
 from Utils.settings import Settings
-from Utils.unit_handling import unit_integrated, unit_differentiated
+from Utils.unit_handling import Unit, UnitHandler
 from Utils.time_delay import round_time_on_period, center_time
 from Utils.magic_numbers import c_SECONDS_PER_HOUR
 
@@ -122,9 +123,9 @@ class Processor:
             if operation != Operation.DIFF:
                 at_time = datetime.now()
             else:
-                at_time = dest_end_time + timedelta(
-                    minutes=period.to_minutes()) if dest_end_time is not None else datetime.now() - timedelta(
-                    minutes=period.to_minutes())
+                at_time = center_time(datetime.now(), period)
+                # at_time = dest_end_time + timedelta(minutes=period.to_minutes()) if dest_end_time is not None else \
+                #     (datetime.now() - timedelta(minutes=period.to_minutes()))
             if operation in (Operation.AVG, Operation.INTEGRATE):
                 # ref_storage.timestamp_range()
                 start_time = max(at_time, datetime.fromtimestamp(ref_storage.timestamp_range()[0]))
@@ -159,16 +160,14 @@ class Processor:
         Bepaalt van een selectie gespecificeerde signalen over een gegeven tijd het gemiddelde of de integraal.
         Het gemiddelde heeft dezelfde eenheid als het oorspronkelijke signaal en is de som van de signaalwaarden over
         het tijdsinterval gedeeld door het aantal waarden.
-        De integraal heeft de tijd toegevoegd in zijn eenheid. Uitgaande van equidistante tijdsintervallen is de
+        De integraal heeft de tijd in uren toegevoegd in zijn eenheid. Uitgaande van equidistante tijdsintervallen is de
         integraal bepaald door de som van de signaalwaarden over het tijdsinterval gedeeld door aantal waarden maal
         lengte van tijdsinterval.
         """
         data_item_spec = DataItemSpec({signal: storage.data_item_spec.get_unit(signal) if avg is True else
-                            unit_integrated(storage.data_item_spec.get_unit(signal)) for signal in selected_signals})
+                            UnitHandler.integrate(Unit(storage.data_item_spec.get_unit(signal))).value for signal in selected_signals})
         sample = DataItem(data_item_spec, timestamp=datetime.timestamp(set_time))
         hours = (to_time - from_time).total_seconds() / c_SECONDS_PER_HOUR
-        logging.debug(f"{'avg' if avg is True else 'integrate'}: from = {from_time}, to = {to_time}, hours = {hours}, "
-                      f"time = {datetime.fromtimestamp(sample.get_timestamp())}")
         for signal in selected_signals:
             cum_sum = 0.0
             cum_count = 0
@@ -182,6 +181,8 @@ class Processor:
                 sample.set_value(signal, cum_sum / factor)
             except ZeroDivisionError:
                 sample.set_value(signal, 0.0)
+        logging.debug(f"{'avg' if avg is True else 'integrate'}: from = {from_time}, to = {to_time}, hours = {hours}, "
+                      f"time = {datetime.fromtimestamp(sample.get_timestamp())}, result = {sample}")
         return sample
 
     @staticmethod
@@ -196,23 +197,34 @@ class Processor:
         :param diff_time: Het tijdsverschil
         :return: Het dataitem met signaalverschil, of None
         """
-        logging.debug(f"differentiate: at_time = {at_time}")
-        logging.debug(f"differentiate: at_time + diff_time = {at_time + diff_time}")
-        if curr_item := storage.get_data_item(storage.index_from_time(at_time)):
-            curr = curr_item.get_value(signal)
-            logging.debug(f"differentiate: time = {at_time} index = {storage.index_from_time(at_time)} curr = {curr}")
+        to_time = at_time - diff_time
+        logging.debug(f"differentiate: to_time = {to_time}")
+        if prev_index := storage.index_from_time(to_time):
+            if prev_item := storage.get_data_item(prev_index):
+                prev = prev_item.get_value(signal)
+                logging.debug(f"differentiate: prev_time = {to_time} index = {prev_index} prev = {prev}")
+            else:
+                logging.debug(f"differentiate: could not assess prev")
+                return None
         else:
-            logging.debug(f"differentiate: could not assess curr")
-            return None
-        if prev_item := storage.get_data_item(storage.index_from_time(at_time - diff_time)):
+            prev_item = storage.get_data_item(storage.min_time_index())
             prev = prev_item.get_value(signal)
-            logging.debug(
-                f"differentiate: time = {at_time - diff_time} index = {storage.index_from_time(at_time - diff_time)} prev = {prev}")
+            logging.debug(f"Using first value at time={datetime.fromtimestamp(storage.first_time())}")
+
+        logging.debug(f"differentiate: at_time = {at_time}")
+        if curr_index := storage.index_from_time(at_time):
+            if curr_item := storage.get_data_item(curr_index):
+                curr = curr_item.get_value(signal)
+                logging.debug(f"differentiate: time = {at_time} index = {storage.index_from_time(at_time)} curr = {curr}")
+            else:
+                logging.debug(f"differentiate: could not assess curr")
+                return None
         else:
-            logging.debug(f"differentiate: could not assess prev")
-            return None
-        sample = DataItem(DataItemSpec({diff_signal: unit_differentiated(curr_item.get_unit(signal))}),
-                          timestamp=at_time.timestamp())
+            curr_item = storage.get_data_item(storage.last_index())
+            curr = curr_item.get_value(signal)
+            logging.debug(f"Using last value at time={datetime.fromtimestamp(storage.last_time())}")
+        sample = DataItem(DataItemSpec({diff_signal: UnitHandler.differentiate(Unit(curr_item.get_unit(signal))).value}),
+                          timestamp=to_time.timestamp())
         try:
             sample.set_value(diff_signal, curr - prev)
         except TypeError:  # het is voorgekomen dat new = None, had te maken met het eerder missen van scheduled function
@@ -236,8 +248,13 @@ class Processor:
         dependents = Settings().get_derived_signal_dependency(signal)
         src_data_item = src.get_data_item(i_update)
         values = {signal_name: src_data_item.get_value(signal_name) for signal_name in dependents}
+        units = [src_data_item.get_unit(signal_name) for signal_name in dependents]
+        for unit1, unit2 in combinations(units, 2):
+            assert unit1 == unit2
+        assert len(units) > 0
+        unit = units[0]
         match signal:
             case "NET_USAGE":
-                return Grid3phases(values['CURRENT_USAGE'], values['CURRENT_PRODUCTION']).net_consumption
+                return Grid3phases(values['CURRENT_USAGE'], values['CURRENT_PRODUCTION'], unit=Unit(unit)).net_consumption
             case "NET_PRODUCTION":
-                return Grid3phases(values['CURRENT_USAGE'], values['CURRENT_PRODUCTION']).net_production
+                return Grid3phases(values['CURRENT_USAGE'], values['CURRENT_PRODUCTION'], unit=Unit(unit)).net_production

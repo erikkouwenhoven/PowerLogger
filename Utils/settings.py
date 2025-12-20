@@ -1,6 +1,6 @@
 import os
 import configparser
-from typing import Any, Type
+from typing import Any
 
 import serial
 from DataHolder.buffer_attrs import Persistency, LifeSpan
@@ -45,9 +45,9 @@ class Settings:
     def rs232_bytesize(self):
         return eval(self.config.get('RS232', 'bytesize'))
 
-    def get_measurement_p1_signals(self) -> list[Type[P1DataType]]:
+    def get_measurement_p1_signals(self) -> list[P1DataType]:
         signals: list[str] = self.config.get('DATARETRIEVAL', 'p1_signals').split()
-        return [P1DataType[signal] for signal in signals]
+        return [P1DataType(P1DataType[signal]) for signal in signals]
 
     def get_data_stores(self) -> list[str]:
         return self.config.get('DATASTORAGE', 'data_stores').split()
@@ -72,9 +72,9 @@ class Settings:
         return LifeSpan.Circular if self.config.get('DATASTORAGE', data_store_id + '_lifespan') == "circular" \
             else LifeSpan.Linear
 
-    def get_data_store_sampling_period(self, data_store_id) -> Type[Period] | None:
+    def get_data_store_sampling_period(self, data_store_id) -> Period | None:
         try:
-            return Period[self.config.get('DATASTORAGE', data_store_id + '_sampling_period')]
+            return Period(Period[self.config.get('DATASTORAGE', data_store_id + '_sampling_period')])
         except configparser.NoOptionError:
             return None
 
@@ -112,12 +112,12 @@ class Settings:
         except configparser.NoOptionError:
             return None
 
-    def periodicity(self, job_id) -> Type[Period] | None:
+    def periodicity(self, job_id) -> Period | None:
         try:
             result_per = self.config.get('SCHEDULER', job_id + '_periodicity').upper()
         except configparser.NoOptionError:
             return None
-        return Period[result_per]
+        return Period(Period[result_per])
 
     def sched_job_sources(self, job_id) -> list[str]:
         return self.config.get('SCHEDULER', job_id + '_sources').split()
@@ -125,7 +125,7 @@ class Settings:
     def sched_job_destination(self, job_id) -> str:
         return self.config.get('SCHEDULER', job_id + '_destination')
 
-    def sched_job_operation(self, job_id) -> tuple[Type[Operation], list[str] | list[Any]]:
+    def sched_job_operation(self, job_id) -> tuple[Operation, list[str] | list[Any]]:
         """
         Geeft een Operation en operand terug.
         De operand heeft de vorm:
@@ -134,7 +134,7 @@ class Settings:
         - '*' ten teken dat alle signalen onderworpen dienen te worden aan de Operatie
         """
         res = self.config.get('SCHEDULER', job_id + '_operation').split()
-        operation = Operation[res[0]]
+        operation = Operation(Operation[res[0]])
         if len(res) <= 1:
             operand = []
         elif len(res) == 2:

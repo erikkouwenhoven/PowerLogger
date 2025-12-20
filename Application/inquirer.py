@@ -1,12 +1,15 @@
+from __future__ import annotations
+from dataclasses import dataclass
+import logging
 from datetime import datetime
-from typing import Type
-from Application.domain_rules import solar_efficiency, Grid3phases
+from Application.domain_rules import Grid3phases
 from DataHolder.buffer_attrs import Persistency
 from DataHolder.data_holder import DataHolder
 from Utils.time_delay import Period
 from Application.Plugins.plugin import Plugin
 from Application.Plugins.p1_plugin import P1Plugin
 from Application.processor import Processor
+from Utils.unit_handling import Unit, UnitHandler
 
 
 class Inquirer:
@@ -30,20 +33,21 @@ class Inquirer:
             except AttributeError:
                 return None
 
-    def get_recent_data(self, data_store_name: str, signals: list[str]) -> tuple[float, dict[str, tuple[float, str]]] | None:
+    def get_recent_data(self, data_store_name: str, signals: list[str]) -> DataFragment | None:
         """
         Geeft timestamp en dict (key is gegeven signal) met waarde en eenheid van de gevraagde signalen
         """
         if data_store := self.data_holder.data_store(data_store_name):
             if last_data_item := data_store.data.get_data_item(data_store.data.last_index()):
-                return last_data_item.get_timestamp(), {signal: (last_data_item.get_value(signal), last_data_item.get_unit(signal)) for signal in signals}
+                return DataFragment(last_data_item.get_timestamp(),
+                                    {signal: (last_data_item.get_value(signal), last_data_item.get_unit(signal)) for signal in signals})
 
-    def get_summed_data(self, data_store_name: str, signals: list[str], period: Type[Period]) -> tuple[float, dict[str, tuple[float, str]]] | None:
+    def get_summed_data(self, data_store_name: str, signals: list[str], period: Period) -> DataFragment | None:
         if data_store := self.data_holder.data_store(data_store_name):
             data_item = Processor.average_integrate(data_store.data, period.start_time(), datetime.now(), datetime.now(), signals, avg=False)
-            return data_item.get_timestamp(), {signal: (data_item.get_value(signal), data_item.get_unit(signal)) for signal in signals}
+            return DataFragment(data_item.get_timestamp(), {signal: (data_item.get_value(signal), data_item.get_unit(signal)) for signal in signals})
 
-    def get_performance_info(self, period: Period | None) -> tuple[float | None, Grid3phases | None, float | None]:
+    def get_performance_info(self, period: Period | None) -> SolarEfficiency:
         """
         Geeft de volgende data
             zon
@@ -56,43 +60,147 @@ class Inquirer:
             SUM MONTH
             SUM THISYEAR
         """
-        solar_value = None
-        grid_3phases = None
-        solar_eff = None
         # voor de VALUE zoek de volatile datastore die de gevraagde signals bevat
-        solar_signals = ['SOLAR']
+        solar_signal = 'SOLAR'
         if period is None:
-            if solar_data_store := self.data_holder.filter(solar_signals, req_persistency=Persistency.Volatile):
-                res = self.get_recent_data(solar_data_store.name, solar_signals)
+            if solar_data_store := self.data_holder.filter([solar_signal], {"Persistency": Persistency.Volatile}):
+                data_fragment = self.get_recent_data(solar_data_store.name, [solar_signal])
             else:
-                res = None
+                data_fragment = None
         else:
-            if solar_data_store := self.data_holder.filter(solar_signals, req_time_span=period):
-                res = self.get_summed_data(solar_data_store.name, solar_signals, period)
+            if solar_data_store := self.data_holder.filter([solar_signal], {"Time_span": period}):
+                data_fragment = self.get_summed_data(solar_data_store.name, [solar_signal], period)
             else:
-                res = None
-        if res:
-            solar_value = res[1][solar_signals[0]][0]
+                data_fragment = None
+        if data_fragment:
+            solar_value = data_fragment.get_value(solar_signal)
+            solar_unit = data_fragment.get_unit(solar_signal)
+        else:
+            solar_value = None
+            solar_unit = None
+        logging.debug(f"Solar value = {solar_value}")
 
         signals = ['NET_USAGE', 'NET_PRODUCTION']
         if period is None:
-            if signals_data_store := self.data_holder.filter(signals, req_persistency=Persistency.Volatile):
-                res = self.get_recent_data(signals_data_store.name, signals)
+            if signals_data_store := self.data_holder.filter(signals):  # TODO hier zou je moeten vragen naar de datastore met kortste tijdsduur
+                logging.debug(f"immediate: signals_data_store = {signals_data_store.name}")
+                data_fragment = self.get_recent_data(signals_data_store.name, signals)
             else:
-                res = None
+                logging.debug(f"immediate: signals_data_store = None")
+                data_fragment = None
         else:
-            if signals_data_store := self.data_holder.filter(signals, req_time_span=period):
-                res = self.get_summed_data(signals_data_store.name, signals, period)
+            if signals_data_store := self.data_holder.filter(signals, {"Time_span": period}):
+                logging.debug(f"summing over period: signals_data_store = {signals_data_store.name}")
+                data_fragment = self.get_summed_data(signals_data_store.name, signals, period)
             else:
-                res = None
-        if res:
-            grid_3phases = Grid3phases(current_usage = res[1]['NET_USAGE'][0],
-                                   current_production = res[1]['NET_PRODUCTION'][0])
-        if solar_value and grid_3phases:
-            solar_eff = solar_efficiency(solar_value, grid_3phases)
-        return solar_value, grid_3phases, solar_eff
+                logging.debug(f"summing over period: signals_data_store = None")
+                data_fragment = None
+        logging.debug(f"Net data fragment = {data_fragment}")
+        if data_fragment:
+            assert data_fragment.get_unit('NET_USAGE') == data_fragment.get_unit('NET_PRODUCTION')
+            if unit_str := data_fragment.get_unit('NET_USAGE'):
+                unit = Unit(unit_str)
+            else:
+                unit = None
+            grid_3phases = Grid3phases(current_usage = data_fragment.get_value('NET_USAGE'),
+                                       current_production = data_fragment.get_value('NET_PRODUCTION'),
+                                       unit=unit)
+        else:
+            grid_3phases = None
+        return SolarEfficiency(period, solar_value, Unit(solar_unit) if solar_unit is not None else None, grid_3phases)
 
     def get_P1_interface(self):
         for plugin in self.plugins:
             if plugin.plugin_name == P1Plugin.plugin_name:
                 return getattr(plugin, "p1_interface")
+
+
+class DataFragment:
+
+    def __init__(self, timestamp: float, signal_values: dict[str, tuple[float, str]]):
+        self.timestamp = timestamp
+        self.signal_values: dict[str, tuple[float, str]] = signal_values
+
+    def get_value(self, signal: str) -> float:
+        return self.signal_values[signal][0]
+
+    def get_unit(self, signal: str) -> str:
+        return self.signal_values[signal][1]
+
+    def __repr__(self):
+        return (f"DataFragment: t = {self.timestamp} signal_values = "
+                f"{[f'{signal}: {self.signal_values[signal][0]} {self.signal_values[signal][1]}' for signal in self.signal_values]}")
+
+
+@dataclass
+class SolarEfficiency:
+    period: Period | None = None
+    solar_value: float | None = None
+    solar_unit: Unit | None = None
+    grid_3phases: Grid3phases | None = None
+
+    def __repr__(self):
+        """
+            zon
+            terugleveren
+            afnemen
+            zon - efficientie
+        """
+        chosen_unit = self.select_unit()
+        hor_label = f"{self.period.name if self.period is not None else 'Now: '} [{chosen_unit}]"
+        solar = f"{self.solar_value:.2f}" if self.solar_value is not None else '-'
+        prod = f"{self.grid_3phases.current_production:.2f}" if self.grid_3phases is not None else '-'
+        cons = f"{self.grid_3phases.current_usage:.2f}" if self.grid_3phases is not None else '-'
+        eff = f"{self.solar_efficiency:.2f}" if self.solar_efficiency is not None else '-'
+        return f"{hor_label:<12} {solar:<12} {prod:<12} {cons:<12} {eff:<12}"
+
+    def select_unit(self) -> Unit | None:
+        if self.grid_3phases and self.solar_value is not None and self.solar_unit is not None:
+            values: list[tuple[float, Unit]] = [(self.solar_value, self.solar_unit),
+                                                (self.grid_3phases.current_production, self.grid_3phases.unit),
+                                                (self.grid_3phases.current_usage, self.grid_3phases.unit)]
+            converted: list[tuple[float, Unit]] = UnitHandler.convert_common(values)
+            # assert converted[0][1] == converted[1][1] == converted[2][1]
+            self.solar_value = converted[0][0]
+            self.solar_unit = converted[0][1]
+            self.grid_3phases = Grid3phases(current_production=converted[1][0],
+                                            current_usage=converted[2][0],
+                                            unit=converted[1][1])
+            return converted[0][1]
+
+    @staticmethod
+    def header() -> str:  # TODO later weghalen
+        return f"{'':<12} {'Zon':<12} {'Productie':<12} {'Consumptie':<12} {'Efficiency':<12}"
+
+    @staticmethod
+    def get_labels() -> list[str]:
+        return [
+            'Zon',
+            'Productie',
+            'Consumptie',
+            'Efficiency'
+        ]
+
+    def get_values_unit(self) -> tuple[list[float | None], Unit]:
+        chosen_unit = self.select_unit()
+        res = [self.solar_value]
+        if self.grid_3phases:
+            res.append(self.grid_3phases.current_production)
+            res.append(self.grid_3phases.current_usage)
+        else:
+            res.append(None)
+            res.append(None)
+        res.append(self.solar_efficiency)
+        return res, chosen_unit
+
+    @property
+    def solar_efficiency(self) -> float | None:
+        if self.grid_3phases and self.solar_value is not None and self.solar_unit is not None:
+            if (prod := self.grid_3phases.net_production) is not None:
+                try:
+                    solar_conv = UnitHandler.convert(self.solar_value, self.solar_unit, Unit(self.grid_3phases.unit))
+                    return (solar_conv - prod) / solar_conv
+                except ZeroDivisionError:
+                    return None
+        else:
+            return None

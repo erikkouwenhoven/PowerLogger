@@ -60,6 +60,12 @@ class Storage(ABC):
     def index_from_time(self, time: datetime) -> int | None:
         pass
 
+    def first_time(self) -> float | None:
+        try:
+            return self.get_data_item(self.min_time_index()).get_timestamp()
+        except (IndexError, AttributeError, TypeError):
+            return None
+
     def last_time(self) -> float | None:
         try:
             return self.get_data_item(self.last_index()).get_timestamp()
@@ -145,7 +151,7 @@ class CircularStorage(Storage, metaclass=ABCMeta):
         else:
             return self.head
 
-    def last_index(self, offset: int = 0) -> int:
+    def last_index(self, offset: int = 0) -> int | None:
         if self.length() > offset:
             return (self.head - offset - 1 + self.length()) % self.length()
 
@@ -274,7 +280,7 @@ class LinearStorage(Storage, metaclass=ABCMeta):
     def min_time_index(self) -> int:
         return 0
 
-    def last_index(self, offset: int = 0) -> int:
+    def last_index(self, offset: int = 0) -> int | None:
         if self.length() > offset:
             return self.length() - offset - 1
 
@@ -312,11 +318,11 @@ class LinearStorage(Storage, metaclass=ABCMeta):
             if hi - lo <= 1:
                 return lo if timestamp - self.get_data_item(lo).get_timestamp() < self.get_data_item(hi).get_timestamp() - timestamp else hi
 
-    def get_prev_data_item(self, idx: int) -> DataItem:
+    def get_prev_data_item(self, idx: int) -> DataItem | None:
         if idx > 0:
             return self.get_data_item(idx - 1)
 
-    def get_next_data_item(self, idx: int) -> DataItem:
+    def get_next_data_item(self, idx: int) -> DataItem | None:
         if idx < self.last_index():
             return self.get_data_item(self.last_index() + 1)
 

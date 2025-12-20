@@ -44,7 +44,7 @@ def make_handler_class(request_executor: RequestExecutor):
             "/data_store_info": (ResponseReturn.DATA, "get_data_store_info"),
             "/get_data": (ResponseReturn.DATA, "get_compact_data"),
             "/show_data": (ResponseReturn.DATA, "get_readable_data"),
-            "/performance_info": (ResponseReturn.DATA, "get_performance_info"),
+            # "/performance_info": (ResponseReturn.DATA, "get_performance_info"),
             "/shift_info": (ResponseReturn.DATA, "get_shift_info"),
             "/system_info": (ResponseReturn.DATA, "get_system_info"),
             "/raw": (ResponseReturn.TEXT, "get_raw"),
@@ -79,12 +79,15 @@ def make_handler_class(request_executor: RequestExecutor):
                 self.wfile.write(b"<p>Not implemented; path: %b</p>" % self.path.encode())
                 self.wfile.write(b"<p>Usage: %b</p>" % self.help())
                 return
+
+            result = view(parsed.query)
             try:
-                result = view(parsed.query)
+                logging.debug(f"make_handler_class: {parsed.query}")
+                # result = view(parsed.query)
             except AttributeError:
                 self.send_response(200)  # Bad request
                 self.end_headers()
-                self.wfile.write(b"<p>Unknown error path: %b</p>" % self.path.encode())
+                self.wfile.write(b"<p>AttributeError: %b</p>" % parsed.query.encode())
                 self.wfile.write(b"<p>Usage: %b</p>" % self.help())
                 return
 

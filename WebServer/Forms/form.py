@@ -1,16 +1,14 @@
 import abc
-from Application.inquirer import Inquirer
 
 
 class Form:
     """
     Abstract base class for creation of HTML-forms.
     It maintains a list of strings containing the HTML-data and supplies generic methods.
-    Sublasses should implement a render() method.
+    Subclasses should implement a render() method.
     """
 
-    def __init__(self, inquirer: Inquirer):
-        self.inquirer = inquirer
+    def __init__(self):
         self.result = []  # list of strings
 
     @abc.abstractmethod

@@ -32,18 +32,18 @@ class Publisher:
     A plugin may publish an event, resulting in an update of registered plugins for that particular event.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.subscriptions: dict[Plugin, list[str]] = {}
 
-    def register(self, subscriber: Plugin, event_key: str):
+    def register(self, subscriber: Plugin, event_key: str) -> None:
         if subscriber not in self.subscriptions:
             self.subscriptions[subscriber] = []
         self.subscriptions[subscriber].append(event_key)
 
-    def unregister(self, subscriber: Plugin):
+    def unregister(self, subscriber: Plugin) -> None:
         del self.subscriptions[subscriber]
 
-    def publish(self, event_key: str, data):
+    def publish(self, event_key: str, data) -> None:
         for subscriber in self.subscriptions:
             if event_key in self.subscriptions[subscriber]:
                 subscriber.update(event_key, data)
