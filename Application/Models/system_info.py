@@ -37,12 +37,12 @@ class SystemInfo:
             "Boot time": str(datetime.fromtimestamp(psutil.boot_time())),
         }
 
-    @staticmethod
-    def get_app_info() -> dict[str, str]:
-        return {
-            "Database": DBInterface.db_file_name(),
-            "Size of database (bytes)": os.path.getsize(DBInterface.db_file_name()),
-        }
+    def get_app_info(self) -> dict[str, str]:
+        res: dict[str, str] = {}
+        for i, db_interface in enumerate(self.inquirer.data_holder.get_db_interfaces()):
+            res[f"Database {i}"] = f"{db_interface.specifics}"
+            res[f"Size of database {i} (bytes)"] = f"{db_interface.size()}"
+        return res
 
     @staticmethod
     def get_cpu_temp():

@@ -52,6 +52,7 @@ class Publisher:
         for plugin in self.subscriptions:
             if plugin.plugin_name == plugin_name:
                 return plugin
+        return None
 
     def get_listeners(self, event_key: str) -> list[Plugin]:
         return [subscriber for subscriber, subscribed_events in self.subscriptions.items() if

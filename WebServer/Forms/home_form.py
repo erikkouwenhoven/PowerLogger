@@ -56,8 +56,12 @@ class HomeForm(Form):
         """
         info_now: tuple[list[float | None], Unit] = self.inquirer.get_performance_info(None).get_values_unit()
         table_row_now = [f"{item:.2f} {info_now[1].value}" for item in info_now[0]]
-        info_hour = self.inquirer.get_performance_info(Period.HOUR).get_values_unit()
-        table_row_hour = [f"{item:.2f} {info_hour[1].value}" for item in info_hour[0]]
+        info_hour: tuple[list[float | None], Unit | None] = self.inquirer.get_performance_info(Period.HOUR).get_values_unit()
+
+        table_row_hour = [f"{self.repr(item)} {info_hour[1].value if info_hour[1] else '-'}" for item in info_hour[0]]
         return HTMLTable(SolarEfficiency.get_labels(), ["Now", str(Period.HOUR)],
                          [table_row_now, table_row_hour]).render()
 
+    @staticmethod
+    def repr(value: float | None) -> str:
+        return f"{value:.2f}" if value else "-"

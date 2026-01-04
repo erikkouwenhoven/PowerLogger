@@ -101,7 +101,7 @@ def make_handler_class(request_executor: RequestExecutor):
             else:
                 for line in result:
                     self.wfile.write(f"{line}\n".encode('utf-8'))
-            # logging.debug(f"result from do_GET {parsed.query}: {result}")
+            logging.debug(f"result from do_GET {parsed.query}: {result}")
             logging.debug(f"GET request completed")
 
         def help(self):

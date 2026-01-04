@@ -77,8 +77,7 @@ class Processor:
                     assert dependent in merged_data_item_spec.get_elements()
                     merged_data_item_spec.set_unit(item, merged_data_item_spec.get_unit(dependent))
 
-            i_updates = ref_storage.timed_indexes(ref_storage.index_from_time(dest_end_time), None,
-                                                  skip_first=True)  # Geen dubbelingen bij aansluiting
+            i_updates = ref_storage.timed_indexes(ref_storage.index_from_time(dest_end_time), None)
             for i_update in i_updates:
                 time_stamp = ref_storage.get_data_item(i_update).get_timestamp()
                 merged_data_item = DataItem(merged_data_item_spec, time_stamp)
@@ -121,14 +120,13 @@ class Processor:
             assert len(sources) == 1
             ref_storage = self.data_holder.data_store(sources[0]).data
             if operation != Operation.DIFF:
-                at_time = datetime.now()
+                if (at_time := dest_end_time) is None:
+                    at_time = datetime.fromtimestamp(ref_storage.timestamp_range()[0])
             else:
                 at_time = center_time(datetime.now(), period)
-                # at_time = dest_end_time + timedelta(minutes=period.to_minutes()) if dest_end_time is not None else \
-                #     (datetime.now() - timedelta(minutes=period.to_minutes()))
             if operation in (Operation.AVG, Operation.INTEGRATE):
-                # ref_storage.timestamp_range()
-                start_time = max(at_time, datetime.fromtimestamp(ref_storage.timestamp_range()[0]))
+                assert (ref_period := self.data_holder.data_store(sources[0]).sampling_period)
+                start_time = round_time_on_period(at_time, ref_period, round_up = False)
                 end_time = round_time_on_period(start_time, period)
                 set_time = center_time(start_time, period)
                 result_data_item = self.average_integrate(ref_storage, start_time, end_time, set_time, operands,
@@ -171,8 +169,7 @@ class Processor:
         for signal in selected_signals:
             cum_sum = 0.0
             cum_count = 0
-            for idx in storage.timed_indexes(storage.index_from_time(from_time), storage.index_from_time(to_time),
-                                             skip_first=True):
+            for idx in storage.timed_indexes(storage.index_from_time(from_time), storage.index_from_time(to_time)):
                 if (value := storage.get_data_item(idx).get_value(signal)) is not None:
                     cum_sum += value
                 cum_count += 1
@@ -232,7 +229,7 @@ class Processor:
         return sample
 
     @staticmethod
-    def shift(storage: Storage, signal: str, at_timestamp: float, shift_in_seconds: float) -> float:
+    def shift(storage: Storage, signal: str, at_timestamp: float, shift_in_seconds: float) -> float | None:
         """
         Verschuift het signaal in de tijd t.o.v. het tijdstip in het data-item
         :param storage: Storage die de data bevat

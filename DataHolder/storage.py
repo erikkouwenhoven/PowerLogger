@@ -53,7 +53,7 @@ class Storage(ABC):
         pass
 
     @abstractmethod
-    def timed_indexes(self, from_index=None, to_index=None, skip_first=False):
+    def timed_indexes(self, from_index=None, to_index=None):
         pass
 
     @abstractmethod
@@ -164,12 +164,10 @@ class CircularStorage(Storage, metaclass=ABCMeta):
             self.insert(data_item, self.head)
         self.head = (self.head + 1) % self.num_elems
 
-    def timed_indexes(self, from_index=None, to_index=None, skip_first=False):
+    def timed_indexes(self, from_index=None, to_index=None):
         """Geeft de indices op tijdsvolgorde terug door middel van een generator"""
         if from_index is None:
             from_index = self.min_time_index()
-        if skip_first is True:
-            from_index += 1
         if to_index is None:
             to_index = self.last_index()
         if from_index is not None and to_index is not None:
@@ -196,22 +194,22 @@ class CircularStorage(Storage, metaclass=ABCMeta):
             if iteration % 1000 == 0:
                 logging.debug(f"iter = {iteration}")
             m = (int((hi - lo) % self.length() / 2) + lo) % self.length()
-            curr_value = self.get_data_item(m).get_timestamp()
-            if curr_value < timestamp:
-                if lo == m:
+            if curr_value := self.get_data_item(m).get_timestamp():
+                if curr_value < timestamp:
+                    if lo == m:
+                        return lo if timestamp - self.get_data_item(lo).get_timestamp() < self.get_data_item(hi).get_timestamp() - timestamp else hi
+                    lo = m
+                elif curr_value > timestamp:
+                    if hi == m:
+                        return lo if timestamp - self.get_data_item(lo).get_timestamp() < self.get_data_item(hi).get_timestamp() - timestamp else hi
+                    hi = m
+                elif curr_value == timestamp:
+                    return m
+                else:
+                    logging.debug(f"Erroneous exit: lo={lo} hi={hi} timestamp={timestamp}")
+                    return m
+                if abs(hi - lo) <= 1:
                     return lo if timestamp - self.get_data_item(lo).get_timestamp() < self.get_data_item(hi).get_timestamp() - timestamp else hi
-                lo = m
-            elif curr_value > timestamp:
-                if hi == m:
-                    return lo if timestamp - self.get_data_item(lo).get_timestamp() < self.get_data_item(hi).get_timestamp() - timestamp else hi
-                hi = m
-            elif curr_value == timestamp:
-                return m
-            else:
-                logging.debug(f"Erroneous exit: lo={lo} hi={hi} timestamp={timestamp}")
-                return m
-            if abs(hi - lo) <= 1:
-                return lo if timestamp - self.get_data_item(lo).get_timestamp() < self.get_data_item(hi).get_timestamp() - timestamp else hi
 
     def transition_index(self) -> int | None:
         assert self.length() == self.num_elems
@@ -289,13 +287,13 @@ class LinearStorage(Storage, metaclass=ABCMeta):
         logging.debug(f"add_data_item: item={data_item}")
         self.append(data_item)
 
-    def timed_indexes(self, from_index=None, to_index=None, skip_first=False):
+    def timed_indexes(self, from_index=None, to_index=None):
         """Geeft de indices op tijdsvolgorde terug door middel van een generator"""
         if from_index is None:
             from_index = self.min_time_index()
         if to_index is None:
             to_index = self.last_index()
-        for idx in range(from_index if skip_first is False else from_index + 1, to_index + 1):
+        for idx in range(from_index, to_index + 1):
             yield idx
 
     def index_from_time(self, time: datetime) -> int | None:
@@ -379,6 +377,7 @@ class PersistentStorage(Storage, metaclass=ABCMeta):
         self.db_interface.modify_element(self.table, idx, element, value)
 
     def serialize(self, signals: list[str] | None = None, human_readable: bool = True) -> dict:  # override as element-wise data retrieval would be too slow in database implementation
+        logging.debug(f"PersistentStorage.serialize: signals = {signals}, human_readable = {human_readable}")
         all_data = self.db_interface.get_all_data(self.table)
         if signals is None:
             signals = [signal for signal in all_data if signal not in ["timestamp", "units"]]

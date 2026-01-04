@@ -26,9 +26,9 @@ class Period(Enum):
             raise NotImplementedError
 
     def start_time(self, end_time: datetime | None = None) -> datetime:
+        if end_time is None:
+            end_time = datetime.now()
         try:
-            if end_time is None:
-                end_time = datetime.now()
             return end_time - timedelta(minutes=self.to_minutes())
         except NotImplementedError:
             return round_time_on_period(end_time, self, round_up=False)

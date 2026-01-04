@@ -3,6 +3,8 @@ from enum import Enum, auto
 import logging
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+
+from Utils.magic_numbers import c_MINUTES_PER_HOUR
 from Utils.time_delay import Period
 from Utils.settings import Settings
 from Application.Models.operation import Operation
@@ -49,11 +51,11 @@ class Scheduler:
                                       name=job_name,
                                       id=job_name)
                 else:
-                    crontabs = {
-                        Period.HOUR: "0 * * * *",
-                        Period.DAY: "0 0 * * *",
-                        Period.MONTH: "0 0 1 * *",
-                        Period.YEAR: "0 0 1 1 *",
+                    crontabs = {  # minute, hour, day of month, month, day of week
+                        Period.HOUR: f"{sched_job.delay_minutes} * * * *",
+                        Period.DAY: f"{sched_job.delay_minutes} 0 * * *",
+                        Period.MONTH: f"{sched_job.delay_minutes} 0 1 * *",
+                        Period.YEAR: f"{sched_job.delay_minutes} 0 1 1 *",
                     }
                     scheduler.add_job(self.exec_job,
                                       # 'cron',
@@ -98,7 +100,7 @@ class Scheduler:
             logging.error(f"check_job_parameters: The operation {operation} requires exactly one operand, instead {len(operands)} are found")
             return False
 
-        operand_data_stores = list(filter(lambda ds: any(operand in ds.signals for operand in operands),
+        operand_data_stores = list(filter(lambda ds: any(operand in ds.signals for operand in operands if ds),
                                           [self.processor.data_holder.data_store(src) for src in sources]))
         if len(operand_data_stores) != 1:
             logging.error(f"check_job_parameters: The operands {operands} should be all in the same data store")
@@ -114,8 +116,9 @@ class ScheduledJob:
     """
     Houdt de gegevens van een scheduled job bij.
     Mogelijke trigger is: PERIODIC of CRON.
-    Bij PERIODIC hoort interval_minutes en start_at_time; bij CRON hoort Periodicity. De starttijd wordt gegeven
-    (PERIODIC) of gezet op aanvang periode volgens periodicity (dus als MONTHLY dan 00:00 eerste van de maand)
+    Bij PERIODIC hoort interval_minutes en start_at_time; bij CRON hoort Periodicity en is start_at_time optioneel.
+    De starttijd wordt gegeven (PERIODIC) of gezet op aanvang periode volgens periodicity in combinatie met eventuele
+    start_at_time
     """
 
     def __init__(self, job_name: str):
@@ -127,8 +130,13 @@ class ScheduledJob:
         self.delay_minutes = None
         start_at_time = Settings().start_at_time(job_name)
         if self.interval_minutes is None:  # cron
-            assert start_at_time is None, f"Job {job_name}, val {start_at_time}"
             assert self.periodicity is not None, f"Job {job_name}, val {self.periodicity}"
+            if start_at_time is not None:
+                hour_str = start_at_time.split(':')[0]
+                hours = int(hour_str) if len(hour_str) > 0 else 0
+                self.delay_minutes = hours * c_MINUTES_PER_HOUR + int(start_at_time.split(':')[1])
+            else:
+                self.delay_minutes = 0
         else:  # interval
             assert self.periodicity is None, f"Job {job_name}, val {self.periodicity}"
             if start_at_time is not None:

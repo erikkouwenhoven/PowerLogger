@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 from Utils.settings import Settings
 from Application.inquirer import Inquirer
 from WebServer.Forms.home_form import HomeForm
@@ -26,26 +27,35 @@ class RequestExecutor:
 
     def get_data(self, args, human_readable) -> dict | None:
         self.info_msg = "Usage: get_data?data_store_name=<> or get_data?data_store_name=<>&signals=<,>"
-        if dict_args := self._convert_args(args):
+        if (dict_args := self._convert_args(args)) is None:
+            logging.error(f"get_data: Could not convert args {args}")
+            return None
+        try:
+            if (data_store := self.inquirer.data_holder.data_store(dict_args['data_store_name'])) is None:
+                logging.error(f"get_data: Could not obtain data store {dict_args['data_store_name']}")
+                return None
             try:
-                data_store = self.inquirer.data_holder.data_store(dict_args['data_store_name'])
-                try:
-                    signals = dict_args['signals'].split(',')
-                    if signals == '*':
-                        signals = None
-                except KeyError:
+                signals = dict_args['signals'].split(',')
+                if signals == '*':
                     signals = None
             except KeyError:
+                signals = None
+            if data_store.data is None:
+                logging.error(f"get_data: No data in data store {data_store.name}")
                 return None
             return data_store.data.serialize(signals, human_readable=human_readable)
-        else:
+        except KeyError:
+            logging.error(f"get_data: Error in arguments: {dict_args}")
             return None
 
-    def get_data_stores(self, *args):
+    def get_data_stores(self, *args) -> dict[str, list[str]]:
         return {"data_stores": self.inquirer.data_holder.get_data_stores()}
 
-    def get_data_store_info(self, data_store_name: str) -> dict[str, any]:
-        return self.inquirer.data_holder.data_store(data_store_name).data_store_info()
+    def get_data_store_info(self, data_store_name: str) -> dict[str, Any] | None:
+        if data_store := self.inquirer.data_holder.data_store(data_store_name):
+            return data_store.data_store_info()
+        else:
+            return None
 
     @staticmethod
     def get_shift_info(*args):

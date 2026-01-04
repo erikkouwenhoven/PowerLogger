@@ -24,6 +24,7 @@ class Inquirer:
     def get_P1_start_time(self) -> datetime | None:
         if p1_interface := self.get_P1_interface():
             return p1_interface.interpreter.start_time
+        return None
 
     def get_P1_clock(self):
         if p1_interface := self.get_P1_interface():
@@ -38,14 +39,18 @@ class Inquirer:
         Geeft timestamp en dict (key is gegeven signal) met waarde en eenheid van de gevraagde signalen
         """
         if data_store := self.data_holder.data_store(data_store_name):
-            if last_data_item := data_store.data.get_data_item(data_store.data.last_index()):
-                return DataFragment(last_data_item.get_timestamp(),
-                                    {signal: (last_data_item.get_value(signal), last_data_item.get_unit(signal)) for signal in signals})
+            if storage := data_store.data:
+                if last_data_item := storage.get_data_item(storage.last_index()):
+                    return DataFragment(last_data_item.get_timestamp(),
+                                        {signal: (last_data_item.get_value(signal), last_data_item.get_unit(signal)) for signal in signals})
+        return None
 
     def get_summed_data(self, data_store_name: str, signals: list[str], period: Period) -> DataFragment | None:
         if data_store := self.data_holder.data_store(data_store_name):
-            data_item = Processor.average_integrate(data_store.data, period.start_time(), datetime.now(), datetime.now(), signals, avg=False)
-            return DataFragment(data_item.get_timestamp(), {signal: (data_item.get_value(signal), data_item.get_unit(signal)) for signal in signals})
+            if storage := data_store.data:
+                data_item = Processor.average_integrate(storage, period.start_time(), datetime.now(), datetime.now(), signals, avg=False)
+                return DataFragment(data_item.get_timestamp(), {signal: (data_item.get_value(signal), data_item.get_unit(signal)) for signal in signals})
+        return None
 
     def get_performance_info(self, period: Period | None) -> SolarEfficiency:
         """
@@ -155,18 +160,21 @@ class SolarEfficiency:
         return f"{hor_label:<12} {solar:<12} {prod:<12} {cons:<12} {eff:<12}"
 
     def select_unit(self) -> Unit | None:
-        if self.grid_3phases and self.solar_value is not None and self.solar_unit is not None:
-            values: list[tuple[float, Unit]] = [(self.solar_value, self.solar_unit),
-                                                (self.grid_3phases.current_production, self.grid_3phases.unit),
-                                                (self.grid_3phases.current_usage, self.grid_3phases.unit)]
-            converted: list[tuple[float, Unit]] = UnitHandler.convert_common(values)
-            # assert converted[0][1] == converted[1][1] == converted[2][1]
-            self.solar_value = converted[0][0]
-            self.solar_unit = converted[0][1]
-            self.grid_3phases = Grid3phases(current_production=converted[1][0],
-                                            current_usage=converted[2][0],
-                                            unit=converted[1][1])
-            return converted[0][1]
+        if self.grid_3phases is None or self.solar_value is None or self.solar_unit is None:
+            return None
+        if self.grid_3phases.current_usage is None or self.grid_3phases.current_production is None or self.grid_3phases.unit is None:
+            return None
+        values: list[tuple[float, Unit]] = [(self.solar_value, self.solar_unit),
+                                            (self.grid_3phases.current_production, self.grid_3phases.unit),
+                                            (self.grid_3phases.current_usage, self.grid_3phases.unit)]
+        converted: list[tuple[float, Unit]] = UnitHandler.convert_common(values)
+        # assert converted[0][1] == converted[1][1] == converted[2][1]
+        self.solar_value = converted[0][0]
+        self.solar_unit = converted[0][1]
+        self.grid_3phases = Grid3phases(current_production=converted[1][0],
+                                        current_usage=converted[2][0],
+                                        unit=converted[1][1])
+        return converted[0][1]
 
     @staticmethod
     def header() -> str:  # TODO later weghalen
@@ -181,7 +189,7 @@ class SolarEfficiency:
             'Efficiency'
         ]
 
-    def get_values_unit(self) -> tuple[list[float | None], Unit]:
+    def get_values_unit(self) -> tuple[list[float | None], Unit | None]:
         chosen_unit = self.select_unit()
         res = [self.solar_value]
         if self.grid_3phases:
@@ -195,12 +203,12 @@ class SolarEfficiency:
 
     @property
     def solar_efficiency(self) -> float | None:
-        if self.grid_3phases and self.solar_value is not None and self.solar_unit is not None:
-            if (prod := self.grid_3phases.net_production) is not None:
-                try:
-                    solar_conv = UnitHandler.convert(self.solar_value, self.solar_unit, Unit(self.grid_3phases.unit))
-                    return (solar_conv - prod) / solar_conv
-                except ZeroDivisionError:
-                    return None
-        else:
+        if self.grid_3phases is None or self.solar_value is None or self.solar_unit is None:
+            return None
+        if (prod := self.grid_3phases.net_production) is None:
+            return None
+        try:
+            solar_conv = UnitHandler.convert(self.solar_value, self.solar_unit, Unit(self.grid_3phases.unit))
+            return (solar_conv - prod) / solar_conv
+        except ZeroDivisionError:
             return None

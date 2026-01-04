@@ -4,6 +4,7 @@ from typing import Any
 
 import serial
 from DataHolder.buffer_attrs import Persistency, LifeSpan
+from DataHolder.db_interface import DBType, SQLiteDBSpecifics, MariaDBSpecifics, DBSpecifier
 from P1System.p1_data_classes import P1DataType
 from Application.Models.operation import Operation
 from Utils.time_delay import Period
@@ -86,6 +87,44 @@ class Settings:
 
     def get_data_store_db(self, data_store_id) -> str:
         return self.config.get('DATASTORAGE', data_store_id + '_db')
+
+    def get_db_type(self, db_id: str) -> DBType:
+        return DBType.DB_MARIA if self.config.get('DATASTORAGE', db_id + '_db_type') == 'MARIADB' else DBType.DB_SQLITE
+
+    def get_db_specifier(self, db_id: str) -> DBSpecifier:
+        db_type = Settings().get_db_type(db_id)
+        if db_type == DBType.DB_SQLITE:
+            specifics = Settings().get_sqlite_specifics(db_id)
+        elif db_type == DBType.DB_MARIA:
+            specifics = Settings().get_mariadb_specifics(db_id)
+        else:
+            raise NotImplementedError
+        return DBSpecifier(db_id, db_type, specifics)
+
+    def get_sqlite_specifics(self, db_id: str) -> SQLiteDBSpecifics:
+        return SQLiteDBSpecifics(filename=os.path.join(self.data_dir_name(), self.db_filename()))
+
+    def get_mariadb_specifics(self, db_id: str) -> MariaDBSpecifics:
+        return MariaDBSpecifics(user=self.get_MariaDB_user(),
+                                pwd=self.get_MariaDB_pwd(),
+                                host=self.get_MariaDB_host(),
+                                port=self.get_MariaDB_port(),
+                                database=self.get_MariaDB_database())
+
+    def get_MariaDB_user(self) -> str:
+        return self.config.get('DATASTORAGE', 'maria_db_user')
+
+    def get_MariaDB_pwd(self) -> str:
+        return self.config.get('DATASTORAGE', 'maria_db_pwd')
+
+    def get_MariaDB_host(self) -> str:
+        return self.config.get('DATASTORAGE', 'maria_db_host')
+
+    def get_MariaDB_port(self) -> int:
+        return int(self.config.get('DATASTORAGE', 'maria_db_port'))
+
+    def get_MariaDB_database(self) -> str:
+        return self.config.get('DATASTORAGE', 'maria_db_database')
 
     def get_min_storage_time_diff_seconds(self) -> int:
         return int(self.config.get('DATASTORAGE', 'min_storage_time_diff_seconds'))

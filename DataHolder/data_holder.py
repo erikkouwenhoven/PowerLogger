@@ -3,7 +3,7 @@ import logging
 from datetime import datetime
 from Utils.settings import Settings
 from DataHolder.storage import CircularMemStorage, CircularPersistentStorage, LinearPersistentStorage
-from DataHolder.db_interface import DBInterface
+from DataHolder.db_interface import DBInterface, DBInterfaceFactory
 from DataHolder.buffer_attrs import Persistency, LifeSpan
 from DataHolder.data_store import DataStore
 
@@ -42,17 +42,18 @@ class DataHolder:
             signals = Settings().get_data_store_signals(data_store_id)
             buf_len = Settings().get_data_store_buflen(data_store_id) if lifespan == LifeSpan.Circular else 0
             sampling_period = Settings().get_data_store_sampling_period(data_store_id)
-            db = Settings().get_data_store_db(data_store_id) if persistency == Persistency.Persistent else None
+            db_id = Settings().get_data_store_db(data_store_id) if persistency == Persistency.Persistent else None
             data_store = DataStore(name=name, persistency=persistency, lifespan=lifespan, signals=signals,
-                                   sampling_period=sampling_period, buf_len=buf_len, db=db)
-            if persistency == Persistency.Persistent and lifespan == LifeSpan.Circular:
-                db_interface = DBInterface(name, signals)
-                data_store.data = CircularPersistentStorage(buf_len, signals, db_interface, table=name)
+                                   sampling_period=sampling_period, buf_len=buf_len, db_id=db_id)
+            if persistency == Persistency.Persistent:
+                db_interface = DBInterfaceFactory.get_db(Settings().get_db_specifier(db_id))
+                db_interface.create_table(name, signals)
+                if lifespan == LifeSpan.Circular:
+                    data_store.data = CircularPersistentStorage(buf_len, signals, db_interface, table=name)
+                elif lifespan == LifeSpan.Linear:
+                    data_store.data = LinearPersistentStorage(signals, db_interface, table=name)
             elif persistency == Persistency.Volatile and lifespan == LifeSpan.Circular:
                 data_store.data = CircularMemStorage(buf_len, signals)
-            elif persistency == Persistency.Persistent and lifespan == LifeSpan.Linear:
-                db_interface = DBInterface(name, signals)
-                data_store.data = LinearPersistentStorage(signals, db_interface, table=name)
             else:
                 raise NotImplementedError
             data_stores.append(data_store)
@@ -90,3 +91,12 @@ class DataHolder:
         for data_store in result:
             if result[data_store]:
                 return data_store
+
+    def get_db_interfaces(self) -> list[DBInterface]:
+        result: list[DBInterface] = []
+        for data_store in self.data_stores:
+            if data_store.persistency == Persistency.Persistent:
+                db_interface = getattr(data_store.data, "db_interface")
+                if db_interface not in result:
+                    result.append(db_interface)
+        return result

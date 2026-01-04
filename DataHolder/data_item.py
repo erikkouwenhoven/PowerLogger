@@ -22,7 +22,7 @@ class DataItemSpec:
         types_units is a dict signal name: unit
         Self.elements is a dict with key the signal type, and value the unit and the index in the data array.
         """
-        self.elements: dict[str, tuple[str, int]] = {k: (types_units[k], idx) for idx, k in enumerate(types_units)}
+        self.elements: dict[str, tuple[str | None, int]] = {k: (types_units[k], idx) for idx, k in enumerate(types_units)}
 
     def add_element(self, data_type: str, unit: str):
         n = len(self.elements)
@@ -59,7 +59,7 @@ class DataItemSpec:
     def get_elements(self) -> list[str]:
         return [data_type for data_type in self.elements]
 
-    def get_element(self, data_type: str) -> tuple[str, int]:
+    def get_element(self, data_type: str) -> tuple[str | None, int]:
         try:
             return self.elements[data_type]
         except KeyError:
@@ -78,7 +78,7 @@ class DataItemSpec:
 class DataItem:
     """Data holder for the circular buffer. Basically a list with first element the time stamp."""
 
-    def __init__(self, data_item_spec: DataItemSpec, timestamp: float = None):
+    def __init__(self, data_item_spec: DataItemSpec, timestamp: float | None = None):
         self.data_item_spec: DataItemSpec = data_item_spec
         self.item_data: list[float | None] = [None] * (len(data_item_spec.get_elements()) + 1)
         self.item_data[0] = timestamp
@@ -131,7 +131,7 @@ class DataItem:
 
     def to_array(self, selected_signals: list[str] | None = None) -> list[float | None]:
         signals = self.data_item_spec.get_elements() if selected_signals is None else selected_signals
-        array = [None] * (len(signals) + 1)
+        array: list[float | None] = [None] * (len(signals) + 1)
         array[0] = self.item_data[0]
         for i, element in enumerate(signals):
             unit, idx = self.data_item_spec.get_element(element)
