@@ -71,7 +71,7 @@ class UnitHandler:
                 if scores[unit] == max_score:
                     chosen_unit = unit
                     continue
-
+            assert chosen_unit is not None
             result: list[tuple[float, Unit]] = []
             for value in values:
                 result.append((UnitHandler.convert(value[0], value[1], chosen_unit), chosen_unit))
@@ -129,11 +129,25 @@ class UnitHandler:
             return None
 
     @staticmethod
+    def integrate_str(unit: Unit) -> str:
+        if res := UnitHandler.integrate(unit):
+            return res.value
+        else:
+            return "-"
+
+    @staticmethod
     def differentiate(unit: Unit) -> Unit | None:
         for key, value in UnitHandler.Integrated.items():
             if value == unit:
                 return key
         return None
+
+    @staticmethod
+    def differentiate_str(unit: Unit) -> str:
+        if res := UnitHandler.differentiate(unit):
+            return res.value
+        else:
+            return "-"
 
 
 if __name__ == "__main__":

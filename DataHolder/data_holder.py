@@ -13,24 +13,32 @@ class DataHolder:
     Class that maintains the various data stores, either volatile of persistent.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.data_stores: list[DataStore] = self.init_data_stores()
 
-    def get_timerange(self, data_store_name: str) -> list[float] | None:
-        return self.data_store(data_store_name).data.timestamp_range()
+    def get_timerange(self, data_store_name: str) -> list[float | None]:
+        if data_store := self.data_store(data_store_name):
+            if data := data_store.data:
+                return data.timestamp_range()
+        return [None, None]
 
     def get_begin_time(self, data_store_name: str) -> datetime | None:
         if time_range := self.get_timerange(data_store_name):
-            return datetime.fromtimestamp(time_range[0])
+            if begin_time := time_range[0]:
+                return datetime.fromtimestamp(begin_time)
+        return None
 
     def get_end_time(self, data_store_name: str) -> datetime | None:
         if time_range := self.get_timerange(data_store_name):
-            return datetime.fromtimestamp(time_range[1])
+            if end_time := time_range[1]:
+                return datetime.fromtimestamp(end_time)
+        return None
 
     def data_store(self, data_store_name: str) -> DataStore | None:
         for data_store in self.data_stores:
             if data_store.name == data_store_name:
                 return data_store
+        return None
 
     def init_data_stores(self) -> list[DataStore]:
         data_stores = []
@@ -46,6 +54,7 @@ class DataHolder:
             data_store = DataStore(name=name, persistency=persistency, lifespan=lifespan, signals=signals,
                                    sampling_period=sampling_period, buf_len=buf_len, db_id=db_id)
             if persistency == Persistency.Persistent:
+                assert db_id
                 db_interface = DBInterfaceFactory.get_db(Settings().get_db_specifier(db_id))
                 db_interface.create_table(name, signals)
                 if lifespan == LifeSpan.Circular:
@@ -79,8 +88,12 @@ class DataHolder:
                         if data_store.persistency != requirements["Persistency"]:
                             result[data_store] = False
                     if "Time_span" in requirements:
-                        if ts_range := data_store.data.timestamp_range():
-                            if requirements["Time_span"].is_contained(timerange_secs = ts_range[1] - ts_range[0]) is False:
+                        if data := data_store.data:
+                            ts_range = data.timestamp_range()
+                            if ts_range[0] and ts_range[1]:
+                                if requirements["Time_span"].is_contained(timerange_secs = ts_range[1] - ts_range[0]) is False:
+                                    result[data_store] = False
+                            else:
                                 result[data_store] = False
                         else:
                             result[data_store] = False
@@ -91,6 +104,7 @@ class DataHolder:
         for data_store in result:
             if result[data_store]:
                 return data_store
+        return None
 
     def get_db_interfaces(self) -> list[DBInterface]:
         result: list[DBInterface] = []

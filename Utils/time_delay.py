@@ -5,6 +5,7 @@ from Utils.magic_numbers import (c_MINUTES_PER_HOUR, c_MINUTES_PER_DAY, c_MINUTE
 
 
 class Period(Enum):
+    FIVEMIN = auto()
     HOUR = auto()
     DAY = auto()
     MONTH = auto()
@@ -14,7 +15,9 @@ class Period(Enum):
     THISYEAR = auto()
 
     def to_minutes(self) -> int:
-        if self == self.HOUR:
+        if self == self.FIVEMIN:
+            return 5
+        elif self == self.HOUR:
             return c_MINUTES_PER_HOUR
         elif self == self.DAY:
             return c_MINUTES_PER_DAY
@@ -31,7 +34,7 @@ class Period(Enum):
         try:
             return end_time - timedelta(minutes=self.to_minutes())
         except NotImplementedError:
-            return round_time_on_period(end_time, self, round_up=False)
+            return self.round_time_on_period(end_time, round_up=False)
 
     def is_contained(self, timerange_secs: float) -> bool:
         try:
@@ -39,8 +42,52 @@ class Period(Enum):
         except NotImplementedError:
             return timerange_secs > (datetime.now() - self.start_time()).total_seconds()
 
+    def round_time_on_period(self, date_time: datetime, round_up: bool = True) -> datetime:
+        if self == Period.FIVEMIN:
+            rounded = datetime(year=date_time.year, month=date_time.month, day=date_time.day, hour=date_time.hour,
+                               minute=5 * (date_time.minute // 5), second=0)
+            return rounded + timedelta(minutes=5) if round_up is True else rounded
+        elif self == Period.HOUR:
+            rounded = datetime(year=date_time.year, month=date_time.month, day=date_time.day, hour=date_time.hour,
+                               minute=0, second=0)
+            return rounded + timedelta(hours=1) if round_up is True else rounded
+        elif self == Period.DAY:
+            rounded = datetime(year=date_time.year, month=date_time.month, day=date_time.day, hour=0, minute=0, second=0)
+            return rounded + timedelta(days=1) if round_up is True else rounded
+        elif self == Period.MONTH:
+            if round_up is True:
+                try:
+                    return datetime(year=date_time.year, month=date_time.month + 1, day=1, hour=0, minute=0, second=0)
+                except ValueError:
+                    return datetime(year=date_time.year + 1, month=1, day=1, hour=0, minute=0, second=0)
+            else:
+                return datetime(year=date_time.year, month=date_time.month, day=1, hour=0, minute=0, second=0)
+        elif self == Period.YEAR:
+            return datetime(year=date_time.year + 1 if round_up is True else date_time.year, month=1, day=1, hour=0, minute=0, second=0)
+        else:
+            raise RuntimeError("Unknown Period")
 
-def time_delay_minutes(time_str: str) -> int | None:
+    def center_time(self, date_time: datetime) -> datetime:
+        return self.round_time_on_period(date_time) - timedelta(minutes=period.to_minutes() / 2)
+
+    def stuff_it(self, from_center_date_time: datetime) -> list[datetime]:
+        """Vult vanaf een periode met gegeven center aan tot nu met periodes die volledig passend zijn"""
+        usable_time = datetime.now() - (from_center_date_time + timedelta(minutes=self.to_minutes() / 2))
+        if (num := int((usable_time.total_seconds() / c_SECONDS_PER_MINUTE) / self.to_minutes())) > 0:
+            return [from_center_date_time + timedelta(minutes=(i + 1) * self.to_minutes()) for i in range(num)]
+        else:
+            return []
+
+    def fill_backwards(self, first_data_point: datetime) -> list[datetime]:
+        """Vult vanaf nu periodes terug in de tijd totdat er geen data meer is"""
+        now_rounded = self.round_time_on_period(datetime.now(), round_up=False)  # het eindpunt van de laatst passende
+        usable_time = now_rounded - first_data_point
+        if (num := int((usable_time.total_seconds() / c_SECONDS_PER_MINUTE) / self.to_minutes())) > 0:
+            return [now_rounded - timedelta(minutes=(i + 0.5) * self.to_minutes()) for i in reversed(range(num))]
+        else:
+            return []
+
+def time_delay_minutes(time_str: str) -> int:
     """
     Geeft de delay in minuten tot de gegeven tijd is bereikt. De tijd is gespecificeerd in de vorm van hh:mm.
     Het deel hh is optioneel, indien weggelaten wordt er voor het eerstvolgende uur een delay bepaald.
@@ -59,31 +106,6 @@ def time_delay_minutes(time_str: str) -> int | None:
     return delay
 
 
-def round_time_on_period(date_time: datetime, period: Period, round_up: bool = True) -> datetime:
-    if period == Period.HOUR:
-        rounded = datetime(year=date_time.year, month=date_time.month, day=date_time.day, hour=date_time.hour, minute=0, second=0)
-        return rounded + timedelta(hours=1) if round_up is True else rounded
-    elif period == Period.DAY:
-        rounded = datetime(year=date_time.year, month=date_time.month, day=date_time.day, hour=0, minute=0, second=0)
-        return rounded + timedelta(days=1) if round_up is True else rounded
-    elif period == Period.MONTH:
-        if round_up is True:
-            try:
-                return datetime(year=date_time.year, month=date_time.month + 1, day=1, hour=0, minute=0, second=0)
-            except ValueError:
-                return datetime(year=date_time.year + 1, month=1, day=1, hour=0, minute=0, second=0)
-        else:
-            return datetime(year=date_time.year, month=date_time.month, day=1, hour=0, minute=0, second=0)
-    elif period == Period.YEAR:
-        return datetime(year=date_time.year + 1 if round_up is True else date_time.year, month=1, day=1, hour=0, minute=0, second=0)
-    else:
-        raise RuntimeError("Unknown Period")
-
-
-def center_time(date_time: datetime, period: Period) -> datetime:
-    return round_time_on_period(date_time, period) - timedelta(minutes=period.to_minutes() / 2)
-
-
 if __name__ == "__main__":
     time_str = "00:10"
     print(f"time_str: {time_str}. Dit is over: {time_delay_minutes(time_str)//60};{time_delay_minutes(time_str) % 60}")
@@ -98,29 +120,39 @@ if __name__ == "__main__":
     time_str = ":46"
     print(f"time_str: {time_str}. Dit is over: {time_delay_minutes(time_str)//60};{time_delay_minutes(time_str) % 60}")
 
+    period = Period.FIVEMIN
+    print(f"Volgend op geheel {period}: {period.round_time_on_period(datetime.now())}")
     period = Period.HOUR
-    print(f"Volgend op geheel {period}: {round_time_on_period(datetime.now(), period)}")
+    print(f"Volgend op geheel {period}: {period.round_time_on_period(datetime.now())}")
     period = Period.DAY
-    print(f"Volgend op geheel {period}: {round_time_on_period(datetime.now(), period)}")
+    print(f"Volgend op geheel {period}: {period.round_time_on_period(datetime.now())}")
     period = Period.MONTH
-    print(f"Volgend op geheel {period}: {round_time_on_period(datetime.now(), period)}")
+    print(f"Volgend op geheel {period}: {period.round_time_on_period(datetime.now())}")
     period = Period.YEAR
-    print(f"Volgend op geheel {period}: {round_time_on_period(datetime.now(), period)}")
+    print(f"Volgend op geheel {period}: {period.round_time_on_period(datetime.now())}")
+
+    period = Period.FIVEMIN
+    print(f"2 x volgend op geheel {period}: {period.round_time_on_period(period.round_time_on_period(datetime.now()))}")
+    period = Period.HOUR
+    print(f"2 x volgend op geheel {period}: {period.round_time_on_period(period.round_time_on_period(datetime.now()))}")
+    period = Period.DAY
+    print(f"2 x volgend op geheel {period}: {period.round_time_on_period(period.round_time_on_period(datetime.now()))}")
+    period = Period.MONTH
+    print(f"2 x volgend op geheel {period}: {period.round_time_on_period(period.round_time_on_period(datetime.now()))}")
+    period = Period.YEAR
+    print(f"2 x volgend op geheel {period}: {period.round_time_on_period(period.round_time_on_period(datetime.now()))}")
+
+    period = Period.FIVEMIN
+    print(f"Center op geheel {period}: {period.center_time(datetime.now())}")
+    period = Period.HOUR
+    print(f"Center op geheel {period}: {period.center_time(datetime.now())}")
+    period = Period.DAY
+    print(f"Center op geheel {period}: {period.center_time(datetime.now())}")
+    period = Period.MONTH
+    print(f"Center op geheel {period}: {period.center_time(datetime.now())}")
+    period = Period.YEAR
+    print(f"Center op geheel {period}: {period.center_time(datetime.now())}")
 
     period = Period.HOUR
-    print(f"2 x volgend op geheel {period}: {round_time_on_period(round_time_on_period(datetime.now(), period), period)}")
-    period = Period.DAY
-    print(f"2 x volgend op geheel {period}: {round_time_on_period(round_time_on_period(datetime.now(), period), period)}")
-    period = Period.MONTH
-    print(f"2 x volgend op geheel {period}: {round_time_on_period(round_time_on_period(datetime.now(), period), period)}")
-    period = Period.YEAR
-    print(f"2 x volgend op geheel {period}: {round_time_on_period(round_time_on_period(datetime.now(), period), period)}")
-
-    period = Period.HOUR
-    print(f"Center op geheel {period}: {center_time(datetime.now(), period)}")
-    period = Period.DAY
-    print(f"Center op geheel {period}: {center_time(datetime.now(), period)}")
-    period = Period.MONTH
-    print(f"Center op geheel {period}: {center_time(datetime.now(), period)}")
-    period = Period.YEAR
-    print(f"Center op geheel {period}: {center_time(datetime.now(), period)}")
+    print(f"stuff_it: {period.stuff_it(datetime.now()-timedelta(minutes=149))}")
+    print(f"fill_backwards: {period.fill_backwards(datetime.now()-timedelta(minutes=149))}")

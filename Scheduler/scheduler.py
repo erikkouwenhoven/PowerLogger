@@ -52,11 +52,13 @@ class Scheduler:
                                       id=job_name)
                 else:
                     crontabs = {  # minute, hour, day of month, month, day of week
+                        Period.FIVEMIN: "*/5 * * * *",
                         Period.HOUR: f"{sched_job.delay_minutes} * * * *",
                         Period.DAY: f"{sched_job.delay_minutes} 0 * * *",
                         Period.MONTH: f"{sched_job.delay_minutes} 0 1 * *",
                         Period.YEAR: f"{sched_job.delay_minutes} 0 1 1 *",
                     }
+                    assert sched_job.periodicity
                     scheduler.add_job(self.exec_job,
                                       # 'cron',
                                       CronTrigger.from_crontab(crontabs[sched_job.periodicity]),
@@ -75,13 +77,18 @@ class Scheduler:
                                               operands=kwargs['operand'])
 
     def check_job_parameters(self, sources: list[str], dest: str, operation: Operation, operands: list[str]) -> bool:
-        for data_store in sources + [dest]:
-            if self.processor.data_holder.data_store(data_store) is None:
-                logging.error(f"check_job_parameters: Data store {data_store} is unknown")
+        for ds_str in sources + [dest]:
+            if self.processor.data_holder.data_store(ds_str) is None:
+                logging.error(f"check_job_parameters: Data store {ds_str} is unknown")
                 return False
 
-        source_signals = [signal for source in sources for signal in self.processor.data_holder.data_store(source).signals]
-        dest_signals = [signal for signal in self.processor.data_holder.data_store(dest).signals]
+        source_signals: list[str] = []
+        for source in sources:
+            if data_store := self.processor.data_holder.data_store(source):
+                source_signals += [signal for signal in data_store.signals]
+        dest_signals = []
+        if data_store := self.processor.data_holder.data_store(dest):
+            dest_signals += [signal for signal in data_store.signals]
         if all([dest_signal in source_signals + Settings().derived_signals() for dest_signal in dest_signals]) is False and operation is not Operation.DIFF:
             logging.error(f"check_job_parameters: Not all destination signals ({dest_signals}) in source signals ({source_signals})")
             return False

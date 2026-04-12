@@ -54,8 +54,9 @@ class HomeForm(Form):
             SUM MONTH
             SUM THISYEAR
         """
-        info_now: tuple[list[float | None], Unit] = self.inquirer.get_performance_info(None).get_values_unit()
-        table_row_now = [f"{item:.2f} {info_now[1].value}" for item in info_now[0]]
+        info_now: tuple[list[float | None], Unit | None] = self.inquirer.get_performance_info(None).get_values_unit()
+        unit_str = info_now[1].value if info_now[1] else '-'
+        table_row_now = [f"{item:.2f} {unit_str}" for item in info_now[0]]
         info_hour: tuple[list[float | None], Unit | None] = self.inquirer.get_performance_info(Period.HOUR).get_values_unit()
 
         table_row_hour = [f"{self.repr(item)} {info_hour[1].value if info_hour[1] else '-'}" for item in info_hour[0]]

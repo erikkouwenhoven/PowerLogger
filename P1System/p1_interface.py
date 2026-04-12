@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from P1System.p1_data_classes import P1Sample
 from P1System.interpreter import Interpreter
 from P1System.serial_settings import SerialSettings
@@ -43,7 +44,7 @@ class P1Interface:
             getSample():            returns latest sample
     """
 
-    def __init__(self, p1_value_types: list[P1DataType], external_post_sample_cb: callable(P1Sample)):
+    def __init__(self, p1_value_types: list[P1DataType], external_post_sample_cb: Callable[[P1Sample], None]):
         self.reqValues: list[P1DataType] = P1DataType.all_poss() if p1_value_types is None else p1_value_types
         self.external_post_sample_cb = external_post_sample_cb
         self.interpreter = Interpreter(SerialSettings())
@@ -74,5 +75,5 @@ class P1Interface:
         if self.external_post_sample_cb:
             self.external_post_sample_cb(sample)
 
-    def get_sampling_period(self) -> float:
+    def get_sampling_period(self) -> float | None:
         return self.interpreter.get_sampling_period()

@@ -41,7 +41,8 @@ class Inquirer:
         if data_store := self.data_holder.data_store(data_store_name):
             if storage := data_store.data:
                 if last_data_item := storage.get_data_item(storage.last_index()):
-                    return DataFragment(last_data_item.get_timestamp(),
+                    if timestamp := last_data_item.get_timestamp():
+                        return DataFragment(timestamp,
                                         {signal: (last_data_item.get_value(signal), last_data_item.get_unit(signal)) for signal in signals})
         return None
 
@@ -49,7 +50,8 @@ class Inquirer:
         if data_store := self.data_holder.data_store(data_store_name):
             if storage := data_store.data:
                 data_item = Processor.average_integrate(storage, period.start_time(), datetime.now(), datetime.now(), signals, avg=False)
-                return DataFragment(data_item.get_timestamp(), {signal: (data_item.get_value(signal), data_item.get_unit(signal)) for signal in signals})
+                if timestamp := data_item.get_timestamp():
+                    return DataFragment(timestamp, {signal: (data_item.get_value(signal), data_item.get_unit(signal)) for signal in signals})
         return None
 
     def get_performance_info(self, period: Period | None) -> SolarEfficiency:
@@ -122,14 +124,14 @@ class Inquirer:
 
 class DataFragment:
 
-    def __init__(self, timestamp: float, signal_values: dict[str, tuple[float, str]]):
+    def __init__(self, timestamp: float, signal_values: dict[str, tuple[float | None, str | None]]):
         self.timestamp = timestamp
-        self.signal_values: dict[str, tuple[float, str]] = signal_values
+        self.signal_values: dict[str, tuple[float | None, str | None]] = signal_values
 
-    def get_value(self, signal: str) -> float:
+    def get_value(self, signal: str) -> float | None:
         return self.signal_values[signal][0]
 
-    def get_unit(self, signal: str) -> str:
+    def get_unit(self, signal: str) -> str | None:
         return self.signal_values[signal][1]
 
     def __repr__(self):

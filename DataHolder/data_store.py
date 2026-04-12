@@ -10,7 +10,7 @@ class DataStore:
     """
 
     def __init__(self, name: str, persistency: Persistency, lifespan: LifeSpan, signals: list[str],
-                 sampling_period: Period = None, buf_len: int = 0, db_id: str = None):
+                 sampling_period: Period | None = None, buf_len: int = 0, db_id: str | None = None):
         self.name = name
         self.persistency = persistency
         self.lifespan = lifespan

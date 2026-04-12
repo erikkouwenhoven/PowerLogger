@@ -35,9 +35,8 @@ class RequestExecutor:
                 logging.error(f"get_data: Could not obtain data store {dict_args['data_store_name']}")
                 return None
             try:
-                signals = dict_args['signals'].split(',')
-                if signals == '*':
-                    signals = None
+                signal_args = dict_args['signals'].split(',')
+                signals = None if signal_args == '*' else signal_args
             except KeyError:
                 signals = None
             if data_store.data is None:

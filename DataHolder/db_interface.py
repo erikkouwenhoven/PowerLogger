@@ -67,10 +67,10 @@ class DBInterface(ABC):
         return res
 
     @abstractmethod
-    def insert_data_item(self, table: str, idx: int, data_item_spec: DataItemSpec, array: list[float]):
+    def insert_data_item(self, table: str, idx: int, data_item_spec: DataItemSpec, array: list[float | None]):
         pass
 
-    def append_data_item(self, table: str, data_item_spec: DataItemSpec, array: list[float]):
+    def append_data_item(self, table: str, data_item_spec: DataItemSpec, array: list[float | None]):
         cur = self.con.cursor()
         non_null_elements = [element for i, element in enumerate(data_item_spec.get_elements()) if array[i+1] is not None]
         cur.execute(f"INSERT INTO {table} (timestamp" +
@@ -86,9 +86,11 @@ class DBInterface(ABC):
 
     def get_all_data(self, table: str) -> dict[str, list[float]]:
         cur = self.con.cursor()
-        cur.execute(f"SELECT * FROM {table}")
+        cur.execute("SELECT timestamp" +
+                    "".join([f", {element}" for element in self.get_column_names(table)]) +
+                    f" FROM {table}")
         fetched = cur.fetchall()
-        res = {col: [] for col in ['timestamp'] + self.get_column_names(table)}
+        res: dict[str, list[float]] = {col: [] for col in ['timestamp'] + self.get_column_names(table)}
         for i, values in enumerate(res.values()):
             for row in fetched:
                 values.append(row[i])
@@ -104,8 +106,9 @@ class SQLiteDBInterface(DBInterface):
     def __init__(self, specifics: SQLiteDBSpecifics):
         super().__init__(specifics)
 
-    def init_connection(self, specifics: SQLiteDBSpecifics) -> sqlite3.Connection:
-        db_file_name = specifics.filename
+    def init_connection(self, specifics: DBSpecifics) -> sqlite3.Connection:
+        sqlite_spec = SQLiteDBSpecifics.cast_from_super(specifics)
+        db_file_name = sqlite_spec.filename
         try:
             dburi = 'file:{}?mode=rw'.format(pathname2url(db_file_name))
             con = sqlite3.connect(dburi, uri=True, check_same_thread=False)
@@ -138,7 +141,7 @@ class SQLiteDBInterface(DBInterface):
         logging.debug(f"pragma result: {res}")
         return [item[1] for item in res if item[1] != "timestamp"]
 
-    def insert_data_item(self, table: str, idx: int, data_item_spec: DataItemSpec, array: list[float]):
+    def insert_data_item(self, table: str, idx: int, data_item_spec: DataItemSpec, array: list[float | None]):
         cur = self.con.cursor()
         cur.execute(f"UPDATE {table} SET timestamp=? " +
                     "".join([f", {element}=?" for element in data_item_spec.get_elements()]) +
@@ -159,14 +162,15 @@ class MariaDBInterface(DBInterface):
     def __init__(self, specifics: MariaDBSpecifics):
         super().__init__(specifics)
 
-    def init_connection(self, specifics: MariaDBSpecifics) -> mariadb.Connection:
+    def init_connection(self, specifics: DBSpecifics) -> mariadb.Connection:
+        maria_spec = MariaDBSpecifics.cast_from_super(specifics)
         try:
-            conn = MariaDBInterface.connect(specifics, connect_host_only=False)
+            conn = MariaDBInterface.connect(maria_spec, connect_host_only=False)
         except mariadb.Error as e:
-            conn = MariaDBInterface.connect(specifics, connect_host_only=True)
+            conn = MariaDBInterface.connect(maria_spec, connect_host_only=True)
             cur = conn.cursor()
             cur.execute(f"CREATE DATABASE home_power")
-            conn = MariaDBInterface.connect(specifics, connect_host_only=False)
+            conn = MariaDBInterface.connect(maria_spec, connect_host_only=False)
         return conn
 
     @staticmethod
@@ -201,7 +205,7 @@ class MariaDBInterface(DBInterface):
         res = cur.fetchall()
         return [item[0] for item in res if item[0] != "rowid" and item[0] != "timestamp"]
 
-    def insert_data_item(self, table: str, idx: int, data_item_spec: DataItemSpec, array: list[float]):
+    def insert_data_item(self, table: str, idx: int, data_item_spec: DataItemSpec, array: list[float | None]):
         cur = self.con.cursor()
         cur.execute(f"UPDATE {table} SET timestamp={array[0]} " +
                     "".join([f", {element}={array[i+1]}" for i, element in enumerate(data_item_spec.get_elements())]) +
@@ -285,6 +289,9 @@ class DBInterfaceFactory:
 
 if __name__ == "__main__":
     from Utils.settings import Settings
+
+    maria_db = MariaDBInterface(Settings().get_mariadb_specifics(''))
+    print(f"get_all_data = {maria_db.get_all_data("detail_long_term")}")
 
     logging.basicConfig(filename=r'..\data\log.txt', )
     logging.getLogger().setLevel(logging.DEBUG)

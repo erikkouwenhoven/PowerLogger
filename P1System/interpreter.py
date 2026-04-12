@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Callable
 from datetime import datetime
 from P1System.p1_data_classes import P1DataType, P1Sample
 from P1System.p1_data_classes import P1Value
@@ -61,8 +62,9 @@ class Interpreter:
                     sample.add_value(value)
                 line = self.reader.get_line()
             return sample
+        return None
 
-    def run_continuously(self, requested_values: list[P1DataType], post_sample_cb: callable(P1Sample)):
+    def run_continuously(self, requested_values: list[P1DataType], post_sample_cb: Callable[[P1Sample], None] | None):
         logging.info(f"Start continuous sampling for values {requested_values}")
         self._stop_running = False
         self.start_time = datetime.now()
@@ -76,7 +78,7 @@ class Interpreter:
     def stop_running(self):
         self._stop_running = True
 
-    def decode(self, line: bytes, requested_values: list[P1DataType]) -> (bool, float):
+    def decode(self, line: bytes, requested_values: list[P1DataType]) -> tuple[bool, P1Value | None]:
         if self.startTelegram in line:
             return True, None
         else:
@@ -88,10 +90,8 @@ class Interpreter:
                     bracket_open = line.rfind(b'(', pos)  # Last occurrence, for gas
                     bracket_close = line.rfind(b')', pos)
                     if bracket_open != -1 and bracket_close != -1:
-                        value = self.decode_value(req, line[bracket_open + 1:bracket_close],
-                                                  self.second_value(line, bracket_open))
-                        if value:
-                            return reset, value
+                        if p1_value := self.decode_value(req, line[bracket_open + 1:bracket_close], self.second_value(line, bracket_open)):
+                            return reset, p1_value
         return False, None
 
     @staticmethod
@@ -99,19 +99,20 @@ class Interpreter:
         if (bracket_open_2 := line.find(b'(')) != bracket_open:
             bracket_close_2 = line.find(b')')
             return line[bracket_open_2 + 1:bracket_close_2]
+        return None
 
     @staticmethod
-    def decode_value(datatype: P1DataType, encoded_str: bytes, extra: bytes):
+    def decode_value(datatype: P1DataType, encoded_str: bytes, extra: bytes | None) -> P1Value:
         ret_val = P1Value(datatype)
         if datatype == P1DataType.TIMESTAMP:
-            ret_val.set_value(encoded_str)
+            ret_val.set_timestamp(encoded_str)
         else:
             if (split := encoded_str.find(b'*')) != -1:
                 try:
                     value = float(encoded_str[:split])
                 except ValueError:  # in some rare cases the string contains weird characters
                     value = None
-                    logging.error(f"decodeValue: could not convert {encoded_str} to float")
+                    logging.error(f"decodeValue: could not convert {encoded_str.decode()} to float")
                 unit = encoded_str[split + 1:]
                 ret_val.set_value(value, unit=unit)
             else:
@@ -119,7 +120,7 @@ class Interpreter:
                     value = int(encoded_str)
                 except ValueError:  # in some rare cases the string contains weird characters
                     value = None
-                    logging.error(f"decodeValue: could not convert {encoded_str} to int")
+                    logging.error(f"decodeValue: could not convert {encoded_str.decode()} to int")
                 ret_val.set_value(value, unit=None)
         if extra:
             ret_val.set_extra_timestamp(extra)
@@ -128,7 +129,8 @@ class Interpreter:
     def get_raw_lines(self) -> list[bytes]:
         return self._raw_lines
 
-    def get_sampling_period(self, update: bool = False) -> float:
+    def get_sampling_period(self, update: bool = False) -> float | None:
         if self.sampling_period is None or update is True:
-            self.sampling_period = (datetime.now() - self.start_time).total_seconds() / self.num_samples
+            if self.num_samples and self.start_time:
+                self.sampling_period = (datetime.now() - self.start_time).total_seconds() / self.num_samples
         return self.sampling_period
