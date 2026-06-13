@@ -70,6 +70,9 @@ class Period(Enum):
     def center_time(self, date_time: datetime) -> datetime:
         return self.round_time_on_period(date_time) - timedelta(minutes=period.to_minutes() / 2)
 
+    def delta(self) -> timedelta:
+        return timedelta(minutes=self.to_minutes())
+
     def stuff_it(self, from_center_date_time: datetime) -> list[datetime]:
         """Vult vanaf een periode met gegeven center aan tot nu met periodes die volledig passend zijn"""
         usable_time = datetime.now() - (from_center_date_time + timedelta(minutes=self.to_minutes() / 2))

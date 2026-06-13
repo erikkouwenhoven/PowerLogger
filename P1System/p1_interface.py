@@ -56,10 +56,9 @@ class P1Interface:
         self.interpreter.sync_sample()
         self.interpreter.run_continuously(self.reqValues, self._sample_complete)
 
-    def single_shot(self) -> P1Sample:
+    def single_shot(self) -> P1Sample | None:
         self.interpreter.sync_sample()
-        sample = self.interpreter.get_sample(self.reqValues)
-        return sample
+        return self.interpreter.get_sample(self.reqValues)
 
     def stop(self):
         self.interpreter.stop_running()

@@ -1,6 +1,7 @@
 import logging
 from collections.abc import Callable
 from datetime import datetime
+from P1System.crc16 import modbus_crc16
 from P1System.p1_data_classes import P1DataType, P1Sample
 from P1System.p1_data_classes import P1Value
 from P1System.serial_reader import SerialReader
@@ -35,7 +36,9 @@ class Interpreter:
         P1DataType.CUMULATIVE_GAS: b"0-1:24.2",
     }
 
-    startTelegram = b'XMX5LGBBFG1012622655'
+    # startTelegram = b'XMX5LGBBFG1012622655'  # de oude meter
+    startTelegram = b'KAIFA-METER'
+    end_telegram = b'!'
 
     def __init__(self, serial_settings: SerialSettings):
         self.reader: SerialReader = SerialReader(serial_settings)
@@ -47,21 +50,62 @@ class Interpreter:
 
     def sync_sample(self):
         line = self.reader.get_line()
-        while line and self.startTelegram not in line:
+        logging.debug(f"P1Plugin sync_sample, first line: {line}")
+        while line and self.end_telegram not in line:
             line = self.reader.get_line()
+            logging.debug(f"P1Plugin sync_sample, following line: {line}")
+        if line:
+            logging.debug(f"found end_telegram in line: {line}")
+        else:
+            logging.debug("no more lines")
 
     def get_sample(self, requested_values: list[P1DataType]) -> P1Sample | None:
         sample = P1Sample(requested_values)
-        if line := self.reader.get_line():
-            self._raw_lines.clear()
-            while line and self.startTelegram not in line:
-                self._raw_lines.append(line)
-                reset, value = self.decode(line, requested_values)
-                assert reset is False
-                if value:
-                    sample.add_value(value)
-                line = self.reader.get_line()
-            return sample
+        self._raw_lines.clear()
+        while line := self.reader.get_line():
+            self._raw_lines.append(line)
+            if self.end_telegram in line:
+                break
+        if obtained_crc := self.get_crc(self._raw_lines):
+            if obtained_crc != modbus_crc16(self.data_message(self._raw_lines)):
+                data_message = self.data_message(self._raw_lines)
+                logging.error(f"Invalid sample: crc received={hex(obtained_crc)} crc calced={hex(modbus_crc16(data_message))} {self._raw_lines}\n {data_message=}")
+                return None
+        else:
+            logging.error("No CRC obtained")
+        for line in self._raw_lines:
+            if value := self.decode(line, requested_values):
+                sample.add_value(value)
+        return sample
+
+    def data_message(self, raw_lines: list[bytes]) -> bytes:  # TODO static
+        result = bytes(0)
+        for line in raw_lines:
+            if self.startTelegram in line:
+                # logging.debug(f"data_message: start found in line {line}; split={line.split(b'/')[1]}")
+                logging.debug(f"data_message: start found in line {line}")
+                # alle '/'-karakters aan het begin vervangen door 1 '/'
+                cnt = 0
+                while line[cnt] == ord('/'):
+                    cnt += 1
+                logging.debug(f"eerste regel toevoegen aan data_message {line[cnt - 1:]}; {cnt=}")
+                result += line[cnt - 1:]
+                # result += b'/' +
+            elif self.end_telegram in line:
+                result += self.end_telegram
+            elif len(result) > 0:  # pas regels overnemen als startTelegran is geweest
+                result += line
+        return result
+
+    def get_crc(self, raw_lines: list[bytes]) -> int | None:
+        for line in reversed(raw_lines):
+            try:
+                if line[0] == ord(self.end_telegram):
+                    return int(line[1:5], 16)
+            except (ValueError, IndexError):
+                logging.error(f"get_crc: {line=}")
+                return None
+        logging.error(f"get_crc: no crc {raw_lines=}")
         return None
 
     def run_continuously(self, requested_values: list[P1DataType], post_sample_cb: Callable[[P1Sample], None] | None):
@@ -69,7 +113,7 @@ class Interpreter:
         self._stop_running = False
         self.start_time = datetime.now()
         self.num_samples = 0
-        while self._stop_running is False:
+        while not self._stop_running:
             if sample := self.get_sample(requested_values):
                 self.num_samples += 1
                 if post_sample_cb:
@@ -78,11 +122,7 @@ class Interpreter:
     def stop_running(self):
         self._stop_running = True
 
-    def decode(self, line: bytes, requested_values: list[P1DataType]) -> tuple[bool, P1Value | None]:
-        if self.startTelegram in line:
-            return True, None
-        else:
-            reset = False
+    def decode(self, line: bytes, requested_values: list[P1DataType]) -> P1Value | None:
         for req in requested_values:
             if req in self.obisCode:
                 pos = line.find(self.obisCode[req])
@@ -91,8 +131,10 @@ class Interpreter:
                     bracket_close = line.rfind(b')', pos)
                     if bracket_open != -1 and bracket_close != -1:
                         if p1_value := self.decode_value(req, line[bracket_open + 1:bracket_close], self.second_value(line, bracket_open)):
-                            return reset, p1_value
-        return False, None
+                            return p1_value
+                        else:
+                            print(f"decode: geen value toegekend {req=}, {line=}")
+        return None
 
     @staticmethod
     def second_value(line: bytes, bracket_open: int) -> bytes | None:
@@ -102,7 +144,7 @@ class Interpreter:
         return None
 
     @staticmethod
-    def decode_value(datatype: P1DataType, encoded_str: bytes, extra: bytes | None) -> P1Value:
+    def decode_value(datatype: P1DataType, encoded_str: bytes, extra: bytes | None) -> P1Value | None:
         ret_val = P1Value(datatype)
         if datatype == P1DataType.TIMESTAMP:
             ret_val.set_timestamp(encoded_str)
@@ -111,16 +153,19 @@ class Interpreter:
                 try:
                     value = float(encoded_str[:split])
                 except ValueError:  # in some rare cases the string contains weird characters
-                    value = None
-                    logging.error(f"decodeValue: could not convert {encoded_str.decode()} to float")
+                    logging.error(f"decodeValue: could not convert {encoded_str.decode()} to float; {datatype=}, {encoded_str=}, {extra=}")
+                    return None
                 unit = encoded_str[split + 1:]
+                # even voor de debug
+                # if unit not in ('kW', 'kWh'):
+                #     logging.critical(f"PANIC found unit {unit} in {encoded_str}")
                 ret_val.set_value(value, unit=unit)
             else:
                 try:
                     value = int(encoded_str)
                 except ValueError:  # in some rare cases the string contains weird characters
-                    value = None
                     logging.error(f"decodeValue: could not convert {encoded_str.decode()} to int")
+                    return None
                 ret_val.set_value(value, unit=None)
         if extra:
             ret_val.set_extra_timestamp(extra)

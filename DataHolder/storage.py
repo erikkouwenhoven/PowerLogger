@@ -61,13 +61,13 @@ class Storage(ABC):
         pass
 
     def first_time(self) -> float | None:
-        if data_item := self.get_data_item(self.min_time_index()):
-            return data_item.get_timestamp()
-        else:
-            return None
+        return self.time_from_index(self.min_time_index())
 
     def last_time(self) -> float | None:
-        if data_item := self.get_data_item(self.last_index()):
+        return self.time_from_index(self.last_index())
+
+    def time_from_index(self, index: int) -> float | None:
+        if data_item := self.get_data_item(index):
             return data_item.get_timestamp()
         else:
             return None
